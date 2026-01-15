@@ -11,6 +11,9 @@ const toggleDragBtn = document.getElementById('toggleDrag');
 const togglePanoBtn = document.getElementById('togglePano');
 const sceneSelect = document.getElementById('sceneSelect');
 const statusEl = document.getElementById('status');
+const debugStatusEl = document.getElementById('debugStatus');
+const hudEl = document.getElementById('hud');
+const hudToggleBtn = document.getElementById('hudToggle');
 const debugInfoEl = document.getElementById('debugInfo');
 const debugToggleBtn = document.getElementById('toggleDebugPanel');
 const debugHideUiBtn = document.getElementById('toggleLockUi');
@@ -38,6 +41,7 @@ const state = {
   },
   debugPanelOpen: false,
   parallaxStrength: 'med',
+  hudVisible: true,
   layers: [],
   frameState: new Map(),
   spriteState: new Map(),
@@ -230,6 +234,13 @@ function getParallaxStrengthMultiplier() {
     default:
       return 1.0;
   }
+}
+
+function applyHudVisibility(visible) {
+  if (!hudEl) return;
+  hudEl.style.display = visible ? 'grid' : 'none';
+  state.hudVisible = visible;
+  localStorage.setItem('hudVisible', visible ? '1' : '0');
 }
 
 function padFrame(frame, digits = 2) {
@@ -558,12 +569,14 @@ function updateTransforms() {
 
     const translateBase = parallax.translateBasePx * (0.2 + depthAmp * 1.4) * strength;
     const rotateBase = parallax.rotateBaseDeg * (0.15 + depthAmp * 1.6) * strength;
-    const layerOffsetX = depthAmp * 6;
-    const layerOffsetY = depthAmp * -4;
-    const tx = yawNorm * translateBase * translate.x + layerOffsetX;
-    const ty = pitchNorm * translateBase * translate.y + layerOffsetY;
-    const ry = yawNorm * rotateBase * rotate.y * degToRad;
-    const rx = -pitchNorm * rotateBase * rotate.x * degToRad;
+    const layerOffsetX = depthAmp * 6 + (config.parallax?.offsetPx?.x ?? 0);
+    const layerOffsetY = depthAmp * -4 + (config.parallax?.offsetPx?.y ?? 0);
+    const translateMult = config.parallax?.translateMult ?? 1;
+    const rotateMult = config.parallax?.rotateMult ?? 1;
+    const tx = yawNorm * translateBase * translate.x * translateMult + layerOffsetX;
+    const ty = pitchNorm * translateBase * translate.y * translateMult + layerOffsetY;
+    const ry = yawNorm * rotateBase * rotate.y * rotateMult * degToRad;
+    const rx = -pitchNorm * rotateBase * rotate.x * rotateMult * degToRad;
 
     element.style.transform = `translate3d(${tx}px, ${ty}px, 0px) rotateY(${ry}rad) rotateX(${rx}rad) scale(${scale})`;
     element.style.opacity = opacity;
@@ -588,13 +601,19 @@ function updateCamera() {
 }
 
 function updateStatus() {
-  statusEl.textContent = `yaw: ${state.smoothYaw3D.toFixed(3)} rad\n` +
+  const statusText = `yaw: ${state.smoothYaw3D.toFixed(3)} rad\n` +
     `pitch: ${state.smoothPitch3D.toFixed(3)} rad\n` +
     `传感器: ${state.sensorAvailable ? (state.sensorActive ? '已启用' : '未启用') : '不可用'}\n` +
     `兜底拖拽: ${state.useDrag ? '开' : '关'}\n` +
     `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}\n` +
     `pano url: ${state.panoInfo.url || 'none'}` +
     (state.panoError ? `\n${state.panoError}` : '');
+  if (statusEl) {
+    statusEl.textContent = statusText;
+  }
+  if (debugStatusEl) {
+    debugStatusEl.textContent = statusText;
+  }
 
   if (debugInfoEl && state.config) {
     const sceneKey = state.sceneKey;
@@ -719,6 +738,10 @@ function toggleDebugPanel() {
   localStorage.setItem('debugPanelOpen', state.debugPanelOpen ? '1' : '0');
 }
 
+function toggleHudVisibility() {
+  applyHudVisibility(!state.hudVisible);
+}
+
 function toggleLockUi() {
   state.debugFlags.hideLockUi = !state.debugFlags.hideLockUi;
   lockUi.parentElement.style.display = state.debugFlags.hideLockUi ? 'none' : 'flex';
@@ -813,6 +836,16 @@ function initParallaxStrength() {
   }
 }
 
+function initHudVisibility() {
+  const stored = localStorage.getItem('hudVisible');
+  if (stored !== null) {
+    applyHudVisibility(stored === '1');
+    return;
+  }
+  const prefersHidden = window.matchMedia('(max-width: 900px)').matches;
+  applyHudVisibility(!prefersHidden);
+}
+
 function handleParallaxChange(event) {
   const value = event.target.value;
   state.parallaxStrength = value;
@@ -859,6 +892,9 @@ if (fullscreenBtn) {
 if (parallaxSelect) {
   parallaxSelect.addEventListener('change', handleParallaxChange);
 }
+if (hudToggleBtn) {
+  hudToggleBtn.addEventListener('click', toggleHudVisibility);
+}
 sceneSelect.addEventListener('change', event => {
   setupScene(event.target.value);
 });
@@ -866,6 +902,7 @@ sceneSelect.addEventListener('change', event => {
 initGyro();
 initDebugPanel();
 initParallaxStrength();
+initHudVisibility();
 setupDragFallback();
 loadConfig().then(() => {
   animate();

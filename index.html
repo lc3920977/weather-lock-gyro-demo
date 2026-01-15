@@ -134,6 +134,22 @@
       color: #cfd8ff;
       white-space: pre-line;
     }
+    #hudToggle {
+      position: absolute;
+      top: calc(12px + env(safe-area-inset-top));
+      right: calc(12px + env(safe-area-inset-right));
+      width: 36px;
+      height: 36px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,30,0.7);
+      color: #fff;
+      font-size: 18px;
+      z-index: 4;
+    }
+    #hudToggle:active {
+      transform: scale(0.98);
+    }
     #debugHud {
       background: rgba(12, 16, 30, 0.8);
       border-radius: 10px;
@@ -186,7 +202,9 @@
         <button id="toggleDebugPanel">Debug</button>
       </div>
       <button id="togglePano" hidden>切换为图片</button>
+      <div id="status"></div>
     </div>
+    <button id="hudToggle" aria-label="Toggle HUD">≡</button>
     <div id="debugPanel" hidden>
       <h3>Debug 面板</h3>
       <div class="meta">BUILD_ID: <span id="debugBuild"></span></div>
@@ -197,7 +215,7 @@
       <div class="row">
         <button id="toggleLayerBorders">显示边框</button>
       </div>
-      <pre id="status"></pre>
+      <pre id="debugStatus"></pre>
       <pre id="debugInfo"></pre>
     </div>
     <div id="hint">拖拽屏幕可模拟陀螺仪</div>
