@@ -121,16 +121,52 @@
       },
       "layers": [
         {
-          "id": "night_mist",
+          "id": "night_stars",
           "type": "image",
-          "src": "assets/overlay/layers/clouds/cloud_04.svg",
-          "depth": 0.3,
-          "translate": { "x": 12, "y": 6 },
-          "rotate": { "x": 0.8, "y": 1.2 },
-          "opacity": 0.5,
+          "src": "assets/overlay/layers/stars.png",
+          "depth": 0.55,
+          "translate": { "x": 10, "y": 6 },
+          "rotate": { "x": 0.4, "y": 0.8 },
+          "opacity": 0.75,
           "blendMode": "screen",
-          "blur": 1.2,
+          "blur": 0.8,
+          "scale": 1.08
+        },
+        {
+          "id": "night_meteor",
+          "type": "image",
+          "src": "assets/overlay/layers/meteor.png",
+          "depth": 0.45,
+          "translate": { "x": 14, "y": 10 },
+          "rotate": { "x": 0.8, "y": 1.2 },
+          "opacity": 0.65,
+          "blendMode": "screen",
+          "blur": 0.4,
+          "scale": 1.1
+        },
+        {
+          "id": "night_water_reflect",
+          "type": "image",
+          "src": "assets/overlay/layers/water_reflect.png",
+          "depth": 0.25,
+          "translate": { "x": 18, "y": 16 },
+          "rotate": { "x": 1.2, "y": 1.6 },
+          "opacity": 0.7,
+          "blendMode": "screen",
+          "blur": 0.6,
           "scale": 1.12
+        },
+        {
+          "id": "night_moon",
+          "type": "image",
+          "src": "assets/overlay/layers/moon.png",
+          "depth": 0.15,
+          "translate": { "x": 24, "y": 14 },
+          "rotate": { "x": 1.8, "y": 2.4 },
+          "opacity": 0.95,
+          "blendMode": "normal",
+          "blur": 0,
+          "scale": 1.06
         }
       ],
       "ui": {
@@ -141,12 +177,12 @@
     }
   },
   "calibration": {
-    "maxDeg": 35,
+    "maxDeg": 45,
     "smooth3D": 0.08,
-    "smooth2D": 0.12
+    "smooth2D": 0.11
   },
   "controls": {
-    "yawGain": 1.0,
-    "pitchGain": 0.9
+    "yawGain": 2.0,
+    "pitchGain": 1.6
   }
 }
