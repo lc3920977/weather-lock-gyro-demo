@@ -75,19 +75,68 @@
       }
     },
     "night": {
-      "panoSrc": "assets/pano/night.svg",
+      "panoSrc": "assets/pano/night_pano.png",
+      "pano": {
+        "type": "image",
+        "src": "assets/pano/night_pano.png"
+      },
       "layers": [
         {
-          "id": "night_mist",
+          "id": "night_stars",
           "type": "image",
-          "src": "assets/overlay/layers/clouds/cloud_04.svg",
-          "depth": 0.3,
-          "translate": { "x": 12, "y": 6 },
-          "rotate": { "x": 0.8, "y": 1.2 },
-          "opacity": 0.5,
+          "src": "assets/overlay/layers/stars.png",
+          "depth": 0.1,
+          "translate": { "x": 14, "y": 10 },
+          "rotate": { "x": 0.6, "y": 1.2 },
+          "parallax": { "translateMult": 0.35, "rotateMult": 0.7 },
+          "opacity": 0.75,
           "blendMode": "screen",
-          "blur": 1.2,
-          "scale": 1.12
+          "blur": 0.8,
+          "scale": 1.04
+        },
+        {
+          "id": "night_meteor",
+          "type": "image",
+          "src": "assets/overlay/layers/meteor.png",
+          "depth": 0.35,
+          "translate": { "x": 20, "y": 14 },
+          "rotate": { "x": 1.1, "y": 1.6 },
+          "parallax": { "translateMult": 0.55, "rotateMult": 1.0 },
+          "opacity": 0.65,
+          "blendMode": "screen",
+          "blur": 0.4,
+          "scale": 1.06
+        },
+        {
+          "id": "night_water_reflect",
+          "type": "image",
+          "src": "assets/overlay/layers/water_reflect.png",
+          "depth": 0.7,
+          "translate": { "x": 26, "y": 20 },
+          "rotate": { "x": 1.6, "y": 2.2 },
+          "parallax": {
+            "translateMult": 2.0,
+            "rotateMult": 1.5,
+            "offsetPx": { "x": -4, "y": 5 },
+            "response": { "xFromYaw": 1, "yFromPitch": 0, "rotX": 0, "rotY": 0 }
+          },
+          "opacity": 0.7,
+          "blendMode": "screen",
+          "blur": 0.6,
+          "scale": 1.14
+        },
+        {
+          "id": "night_moon",
+          "type": "image",
+          "src": "assets/overlay/layers/moon.png",
+          "depth": 0.95,
+          "translate": { "x": 32, "y": 22 },
+          "rotate": { "x": 2.2, "y": 3.0 },
+          "parallax": { "translateMult": 2.4, "rotateMult": 1.8, "offsetPx": { "x": 6, "y": -4 }, "maxDyRatio": 0.16 },
+          "opacity": 0.95,
+          "blendMode": "normal",
+          "blur": 0,
+          "scale": 1.06
         }
       ],
       "ui": {
@@ -97,13 +146,19 @@
       }
     }
   },
+  "parallax": {
+    "translateBasePx": 22,
+    "rotateBaseDeg": 3.0,
+    "scaleOverscan": 1.18,
+    "depthCurve": 1.35
+  },
   "calibration": {
-    "maxDeg": 35,
+    "maxDeg": 55,
     "smooth3D": 0.08,
-    "smooth2D": 0.12
+    "smooth2D": 0.1
   },
   "controls": {
-    "yawGain": 1.0,
-    "pitchGain": 0.9
+    "yawGain": 1.6,
+    "pitchGain": 1.4
   }
 }
