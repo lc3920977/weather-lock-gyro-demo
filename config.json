@@ -1,0 +1,109 @@
+{
+  "scenes": {
+    "day_clear": {
+      "panoSrc": "assets/pano/day_clear.svg",
+      "layers": [
+        {
+          "id": "clouds_frames",
+          "type": "frames",
+          "framePattern": "assets/overlay/layers/clouds/cloud_{frame}.svg",
+          "start": 1,
+          "end": 4,
+          "fps": 6,
+          "depth": 0.45,
+          "translate": { "x": 18, "y": 10 },
+          "rotate": { "x": 1.2, "y": 2.0 },
+          "opacity": 0.75,
+          "blendMode": "screen",
+          "blur": 0.6,
+          "scale": 1.08
+        }
+      ],
+      "ui": {
+        "src": "assets/overlay/lock_ui.svg",
+        "follow": { "x": 8, "y": 6, "rx": 0.5, "ry": 0.5 },
+        "opacity": 0.95
+      }
+    },
+    "day_cloudy": {
+      "panoSrc": "assets/pano/day_cloudy.svg",
+      "layers": [
+        {
+          "id": "clouds_static",
+          "type": "image",
+          "src": "assets/overlay/layers/clouds/cloud_02.svg",
+          "depth": 0.35,
+          "translate": { "x": 14, "y": 8 },
+          "rotate": { "x": 0.8, "y": 1.6 },
+          "opacity": 0.7,
+          "blendMode": "screen",
+          "blur": 0.4,
+          "scale": 1.05
+        }
+      ],
+      "ui": {
+        "src": "assets/overlay/lock_ui.svg",
+        "follow": { "x": 8, "y": 6, "rx": 0.5, "ry": 0.5 },
+        "opacity": 0.95
+      }
+    },
+    "rain": {
+      "panoSrc": "assets/pano/rain.svg",
+      "layers": [
+        {
+          "id": "rain_sprite",
+          "type": "sprite",
+          "src": "assets/overlay/layers/rain/rain_sprite.svg",
+          "frameWidth": 256,
+          "frameHeight": 256,
+          "frames": 4,
+          "fps": 10,
+          "direction": "vertical",
+          "depth": 0.2,
+          "translate": { "x": 10, "y": 12 },
+          "rotate": { "x": 0.6, "y": 0.8 },
+          "opacity": 0.6,
+          "blendMode": "screen",
+          "blur": 0.3,
+          "scale": 1.1
+        }
+      ],
+      "ui": {
+        "src": "assets/overlay/lock_ui.svg",
+        "follow": { "x": 7, "y": 6, "rx": 0.4, "ry": 0.4 },
+        "opacity": 0.92
+      }
+    },
+    "night": {
+      "panoSrc": "assets/pano/night.svg",
+      "layers": [
+        {
+          "id": "night_mist",
+          "type": "image",
+          "src": "assets/overlay/layers/clouds/cloud_04.svg",
+          "depth": 0.3,
+          "translate": { "x": 12, "y": 6 },
+          "rotate": { "x": 0.8, "y": 1.2 },
+          "opacity": 0.5,
+          "blendMode": "screen",
+          "blur": 1.2,
+          "scale": 1.12
+        }
+      ],
+      "ui": {
+        "src": "assets/overlay/lock_ui.svg",
+        "follow": { "x": 6, "y": 5, "rx": 0.4, "ry": 0.4 },
+        "opacity": 0.9
+      }
+    }
+  },
+  "calibration": {
+    "maxDeg": 35,
+    "smooth3D": 0.08,
+    "smooth2D": 0.12
+  },
+  "controls": {
+    "yawGain": 1.0,
+    "pitchGain": 0.9
+  }
+}

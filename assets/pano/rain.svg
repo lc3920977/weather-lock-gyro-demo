@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="1024" viewBox="0 0 2048 1024">
+  <defs>
+    <linearGradient id="storm" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#6b7a8f" />
+      <stop offset="100%" stop-color="#2c394d" />
+    </linearGradient>
+  </defs>
+  <rect width="2048" height="1024" fill="url(#storm)" />
+  <rect x="0" y="0" width="2048" height="1024" fill="#91a4c0" opacity="0.05" />
+</svg>
