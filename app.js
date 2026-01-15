@@ -233,6 +233,10 @@ function getParallaxStrengthMultiplier() {
   }
 }
 
+function getOverlayGlobalAttenuation() {
+  return 0.5;
+}
+
 function applyHudVisibility(visible) {
   if (!hudEl) return;
   hudEl.style.display = visible ? 'grid' : 'none';
@@ -570,10 +574,21 @@ function updateTransforms() {
     const layerOffsetY = depthAmp * -4 + (config.parallax?.offsetPx?.y ?? 0);
     const translateMult = config.parallax?.translateMult ?? 1;
     const rotateMult = config.parallax?.rotateMult ?? 1;
-    const tx = yawNorm * translateBase * translate.x * translateMult + layerOffsetX;
-    const ty = pitchNorm * translateBase * translate.y * translateMult + layerOffsetY;
-    const ry = yawNorm * rotateBase * rotate.y * rotateMult * degToRad;
-    const rx = -pitchNorm * rotateBase * rotate.x * rotateMult * degToRad;
+    const response = config.parallax?.response || {};
+    const yawResponse = response.xFromYaw ?? 1;
+    const pitchResponse = response.yFromPitch ?? 1;
+    const rotXResponse = response.rotX ?? 1;
+    const rotYResponse = response.rotY ?? 1;
+    const globalAttenuation = getOverlayGlobalAttenuation();
+    let tx = yawNorm * translateBase * translate.x * translateMult * globalAttenuation * yawResponse + layerOffsetX;
+    let ty = pitchNorm * translateBase * translate.y * translateMult * globalAttenuation * pitchResponse + layerOffsetY;
+    const ry = yawNorm * rotateBase * rotate.y * rotateMult * globalAttenuation * rotYResponse * degToRad;
+    const rx = -pitchNorm * rotateBase * rotate.x * rotateMult * globalAttenuation * rotXResponse * degToRad;
+
+    if (typeof config.parallax?.maxDyRatio === 'number') {
+      const maxDy = window.innerHeight * config.parallax.maxDyRatio;
+      ty = clamp(ty, -maxDy, maxDy);
+    }
 
     element.style.transform = `translate3d(${tx}px, ${ty}px, 0px) rotateY(${ry}rad) rotateX(${rx}rad) scale(${scale})`;
     element.style.opacity = opacity;
