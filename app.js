@@ -43,8 +43,244 @@ const sphereMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.Bac
 const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
 scene.add(sphereMesh);
 
+const DEFAULT_GRADIENT = {
+  width: 1024,
+  height: 512,
+  stops: [
+    { pos: 0, color: '#0b1124' },
+    { pos: 0.5, color: '#152849' },
+    { pos: 1, color: '#24385d' }
+  ],
+  vignette: {
+    enabled: true,
+    strength: 0.35,
+    power: 2.2,
+    centerX: 0.5,
+    centerY: 0.45
+  },
+  grain: {
+    enabled: true,
+    amount: 0.035,
+    scale: 1.0,
+    monochrome: true
+  },
+  hazeNoise: {
+    enabled: true,
+    opacity: 0.06,
+    scale: 2.4,
+    octaves: 4,
+    lacunarity: 2.0,
+    gain: 0.5,
+    warp: 0.15,
+    biasY: -0.08
+  }
+};
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function fade(t) {
+  return t * t * (3 - 2 * t);
+}
+
+function hashStringToSeed(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function rand() {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), t | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967295;
+  };
+}
+
+function hash2d(x, y, seed) {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1442695041);
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+function smoothValueNoise(x, y, seed) {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const xf = x - x0;
+  const yf = y - y0;
+
+  const n00 = hash2d(x0, y0, seed);
+  const n10 = hash2d(x0 + 1, y0, seed);
+  const n01 = hash2d(x0, y0 + 1, seed);
+  const n11 = hash2d(x0 + 1, y0 + 1, seed);
+
+  const u = fade(xf);
+  const v = fade(yf);
+
+  const nx0 = lerp(n00, n10, u);
+  const nx1 = lerp(n01, n11, u);
+  return lerp(nx0, nx1, v);
+}
+
+function fbmNoise(x, y, options, seed) {
+  let amplitude = 1;
+  let frequency = 1;
+  let total = 0;
+  let maxValue = 0;
+  for (let i = 0; i < options.octaves; i += 1) {
+    total += amplitude * smoothValueNoise(x * frequency, y * frequency, seed + i * 1013);
+    maxValue += amplitude;
+    amplitude *= options.gain;
+    frequency *= options.lacunarity;
+  }
+  return maxValue > 0 ? total / maxValue : 0;
+}
+
+function resolveGradientConfig(gradientConfig) {
+  const base = gradientConfig || {};
+  return {
+    width: base.width ?? DEFAULT_GRADIENT.width,
+    height: base.height ?? DEFAULT_GRADIENT.height,
+    stops: Array.isArray(base.stops) && base.stops.length > 0 ? base.stops : DEFAULT_GRADIENT.stops,
+    vignette: { ...DEFAULT_GRADIENT.vignette, ...(base.vignette || {}) },
+    grain: { ...DEFAULT_GRADIENT.grain, ...(base.grain || {}) },
+    hazeNoise: { ...DEFAULT_GRADIENT.hazeNoise, ...(base.hazeNoise || {}) }
+  };
+}
+
+function drawGradientBase(ctx, width, height, stops) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  const sortedStops = stops.slice().sort((a, b) => a.pos - b.pos);
+  sortedStops.forEach(stop => {
+    gradient.addColorStop(clamp(stop.pos, 0, 1), stop.color);
+  });
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+}
+
+function applyVignette(ctx, width, height, vignette) {
+  if (!vignette.enabled || vignette.strength <= 0) return;
+  const cx = width * vignette.centerX;
+  const cy = height * vignette.centerY;
+  const radius = Math.sqrt(width * width + height * height) * 0.5;
+  const innerStop = clamp(Math.pow(0.6, vignette.power), 0.1, 0.95);
+  const gradient = ctx.createRadialGradient(cx, cy, radius * 0.15, cx, cy, radius);
+  gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  gradient.addColorStop(innerStop, `rgba(0, 0, 0, ${vignette.strength * 0.6})`);
+  gradient.addColorStop(1, `rgba(0, 0, 0, ${vignette.strength})`);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
+function applyGrain(ctx, width, height, grain, rng) {
+  if (!grain.enabled || grain.amount <= 0) return;
+  const scale = grain.scale || 1;
+  const noiseWidth = Math.max(64, Math.round(width / (6 / scale)));
+  const noiseHeight = Math.max(32, Math.round(height / (6 / scale)));
+  const noiseCanvas = document.createElement('canvas');
+  noiseCanvas.width = noiseWidth;
+  noiseCanvas.height = noiseHeight;
+  const noiseCtx = noiseCanvas.getContext('2d');
+  const imageData = noiseCtx.createImageData(noiseWidth, noiseHeight);
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const value = Math.floor(rng() * 255);
+    if (grain.monochrome) {
+      imageData.data[i] = value;
+      imageData.data[i + 1] = value;
+      imageData.data[i + 2] = value;
+    } else {
+      imageData.data[i] = Math.floor(rng() * 255);
+      imageData.data[i + 1] = Math.floor(rng() * 255);
+      imageData.data[i + 2] = Math.floor(rng() * 255);
+    }
+    imageData.data[i + 3] = 255;
+  }
+  noiseCtx.putImageData(imageData, 0, 0);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.globalAlpha = grain.amount;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(noiseCanvas, 0, 0, width, height);
+  ctx.restore();
+}
+
+function applyHazeNoise(ctx, width, height, hazeNoise, seed) {
+  if (!hazeNoise.enabled || hazeNoise.opacity <= 0) return;
+  const scale = hazeNoise.scale || 1;
+  const noiseWidth = Math.max(64, Math.round(width / (8 / scale)));
+  const noiseHeight = Math.max(32, Math.round(height / (8 / scale)));
+  const noiseCanvas = document.createElement('canvas');
+  noiseCanvas.width = noiseWidth;
+  noiseCanvas.height = noiseHeight;
+  const noiseCtx = noiseCanvas.getContext('2d');
+  const imageData = noiseCtx.createImageData(noiseWidth, noiseHeight);
+  const biasY = hazeNoise.biasY || 0;
+
+  for (let y = 0; y < noiseHeight; y += 1) {
+    for (let x = 0; x < noiseWidth; x += 1) {
+      const nx = (x / noiseWidth) * scale;
+      const ny = (y / noiseHeight) * scale + biasY;
+      const warpAmount = hazeNoise.warp || 0;
+      const warpX = warpAmount
+        ? (smoothValueNoise(nx * 0.7, ny * 0.7, seed + 911) - 0.5) * warpAmount
+        : 0;
+      const warpY = warpAmount
+        ? (smoothValueNoise(nx * 0.7 + 3.2, ny * 0.7 + 1.1, seed + 1777) - 0.5) * warpAmount
+        : 0;
+      const value = fbmNoise(nx + warpX, ny + warpY, hazeNoise, seed);
+      const luminance = clamp(Math.round(128 + (value - 0.5) * 80), 90, 190);
+      const index = (y * noiseWidth + x) * 4;
+      imageData.data[index] = luminance;
+      imageData.data[index + 1] = luminance;
+      imageData.data[index + 2] = luminance;
+      imageData.data[index + 3] = 255;
+    }
+  }
+  noiseCtx.putImageData(imageData, 0, 0);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.globalAlpha = hazeNoise.opacity;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(noiseCanvas, 0, 0, width, height);
+  ctx.restore();
+}
+
+function createGradientTexture(sceneKey, gradientConfig) {
+  const config = resolveGradientConfig(gradientConfig);
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = config.width;
+  canvasEl.height = config.height;
+  const ctx = canvasEl.getContext('2d');
+  if (!ctx) return null;
+
+  drawGradientBase(ctx, config.width, config.height, config.stops);
+  applyVignette(ctx, config.width, config.height, config.vignette);
+
+  const seed = hashStringToSeed(sceneKey);
+  applyGrain(ctx, config.width, config.height, config.grain, mulberry32(seed));
+  applyHazeNoise(ctx, config.width, config.height, config.hazeNoise, seed + 199);
+
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  return texture;
 }
 
 function padFrame(frame, digits = 2) {
@@ -85,14 +321,25 @@ function setupScene(sceneKey) {
   if (!sceneConfig) return;
   state.sceneKey = sceneKey;
 
-  const loader = new THREE.TextureLoader();
-  loader.load(sceneConfig.panoSrc, texture => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.mapping = THREE.EquirectangularReflectionMapping;
-    sphereMat.map = texture;
-    sphereMat.needsUpdate = true;
-    state.panoTexture = texture;
-  });
+  if (sceneConfig.pano?.gradient) {
+    const texture = createGradientTexture(sceneKey, sceneConfig.pano.gradient);
+    if (texture) {
+      if (state.panoTexture) state.panoTexture.dispose();
+      sphereMat.map = texture;
+      sphereMat.needsUpdate = true;
+      state.panoTexture = texture;
+    }
+  } else if (sceneConfig.panoSrc) {
+    const loader = new THREE.TextureLoader();
+    loader.load(sceneConfig.panoSrc, texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      if (state.panoTexture) state.panoTexture.dispose();
+      sphereMat.map = texture;
+      sphereMat.needsUpdate = true;
+      state.panoTexture = texture;
+    });
+  }
 
   overlayStage.innerHTML = '';
   state.layers = [];
