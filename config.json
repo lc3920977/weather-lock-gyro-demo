@@ -20,7 +20,7 @@
         }
       ],
       "ui": {
-        "src": "assets/overlay/lock_ui.svg",
+        "src": "assets/overlay/lock_ui.png",
         "follow": { "x": 8, "y": 6, "rx": 0.5, "ry": 0.5 },
         "opacity": 0.95
       }
