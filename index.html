@@ -27,6 +27,7 @@
       width: 100%;
       height: 100%;
       display: block;
+      z-index: 0;
     }
     #overlayStage {
       position: absolute;
@@ -34,10 +35,13 @@
       pointer-events: none;
       transform-style: preserve-3d;
       will-change: transform;
+      z-index: 1;
     }
     .layer {
       position: absolute;
       inset: 0;
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -46,7 +50,7 @@
     .layer img {
       max-width: 140%;
       max-height: 140%;
-      object-fit: contain;
+      object-fit: cover;
       pointer-events: none;
       user-select: none;
     }
@@ -58,6 +62,7 @@
       justify-content: center;
       pointer-events: none;
       will-change: transform, opacity;
+      z-index: 2;
     }
     #lockUi img {
       width: auto;
@@ -76,6 +81,7 @@
       gap: 8px;
       width: min(320px, 90vw);
       backdrop-filter: blur(6px);
+      z-index: 3;
     }
     #hud button, #hud select {
       width: 100%;
@@ -97,6 +103,23 @@
       color: #cfd8ff;
       white-space: pre-line;
     }
+    #debugHud {
+      background: rgba(12, 16, 30, 0.8);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #cfe3ff;
+    }
+    #debugHud summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    #debugHud pre {
+      margin: 6px 0 0;
+      white-space: pre-wrap;
+    }
     #hint {
       position: absolute;
       top: 16px;
@@ -106,6 +129,7 @@
       border-radius: 10px;
       font-size: 12px;
       color: #d8dcff;
+      z-index: 3;
     }
   </style>
 </head>
@@ -121,7 +145,20 @@
         <button id="toggleDrag">拖拽兜底：开</button>
       </div>
       <select id="sceneSelect"></select>
+      <button id="togglePano" hidden>切换为图片</button>
       <div id="status"></div>
+      <details id="debugHud">
+        <summary>Debug HUD</summary>
+        <div class="row">
+          <button id="toggleDebugHud">收起 Debug HUD</button>
+          <button id="toggleLockUi">隐藏 Lock UI</button>
+        </div>
+        <div class="row">
+          <button id="toggleForceVisible">强制可见模式</button>
+          <button id="toggleLayerBorders">显示边框</button>
+        </div>
+        <pre id="debugInfo"></pre>
+      </details>
     </div>
     <div id="hint">拖拽屏幕可模拟陀螺仪</div>
   </div>
