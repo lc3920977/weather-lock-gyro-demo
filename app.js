@@ -48,6 +48,39 @@ const sphereMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.Bac
 const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
 scene.add(sphereMesh);
 
+const DEFAULT_GRADIENT = {
+  width: 1024,
+  height: 512,
+  stops: [
+    { pos: 0, color: '#0b1124' },
+    { pos: 0.5, color: '#152849' },
+    { pos: 1, color: '#24385d' }
+  ],
+  vignette: {
+    enabled: true,
+    strength: 0.35,
+    power: 2.2,
+    centerX: 0.5,
+    centerY: 0.45
+  },
+  grain: {
+    enabled: true,
+    amount: 0.035,
+    scale: 1.0,
+    monochrome: true
+  },
+  hazeNoise: {
+    enabled: true,
+    opacity: 0.06,
+    scale: 2.4,
+    octaves: 4,
+    lacunarity: 2.0,
+    gain: 0.5,
+    warp: 0.15,
+    biasY: -0.08
+  }
+};
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
