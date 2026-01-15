@@ -12,10 +12,14 @@ const togglePanoBtn = document.getElementById('togglePano');
 const sceneSelect = document.getElementById('sceneSelect');
 const statusEl = document.getElementById('status');
 const debugInfoEl = document.getElementById('debugInfo');
-const debugToggleBtn = document.getElementById('toggleDebugHud');
+const debugToggleBtn = document.getElementById('toggleDebugPanel');
 const debugHideUiBtn = document.getElementById('toggleLockUi');
 const debugForceVisibleBtn = document.getElementById('toggleForceVisible');
 const debugShowBorderBtn = document.getElementById('toggleLayerBorders');
+const debugPanelEl = document.getElementById('debugPanel');
+const debugBuildEl = document.getElementById('debugBuild');
+const fullscreenBtn = document.getElementById('enterFullscreen');
+const parallaxSelect = document.getElementById('parallaxStrength');
 
 const state = {
   config: null,
@@ -32,6 +36,8 @@ const state = {
     forceVisible: false,
     showBorders: false
   },
+  debugPanelOpen: false,
+  parallaxStrength: 'med',
   layers: [],
   frameState: new Map(),
   spriteState: new Map(),
@@ -62,39 +68,6 @@ const sphereMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.Bac
 const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
 scene.add(sphereMesh);
 document.title = `${document.title} (${BUILD_ID})`;
-
-const DEFAULT_GRADIENT = {
-  width: 1024,
-  height: 512,
-  stops: [
-    { pos: 0, color: '#0b1124' },
-    { pos: 0.5, color: '#152849' },
-    { pos: 1, color: '#24385d' }
-  ],
-  vignette: {
-    enabled: true,
-    strength: 0.35,
-    power: 2.2,
-    centerX: 0.5,
-    centerY: 0.45
-  },
-  grain: {
-    enabled: true,
-    amount: 0.035,
-    scale: 1.0,
-    monochrome: true
-  },
-  hazeNoise: {
-    enabled: true,
-    opacity: 0.06,
-    scale: 2.4,
-    octaves: 4,
-    lacunarity: 2.0,
-    gain: 0.5,
-    warp: 0.15,
-    biasY: -0.08
-  }
-};
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -236,6 +209,27 @@ function createGradientEquirectTexture(panoConfig, renderer, seed) {
 function buildUrl(src) {
   if (!src) return '';
   return `${src}?v=${BUILD_ID}`;
+}
+
+function getParallaxConfig() {
+  const defaults = {
+    translateBasePx: 22,
+    rotateBaseDeg: 3.0,
+    scaleOverscan: 1.18,
+    depthCurve: 1.35
+  };
+  return { ...defaults, ...(state.config?.parallax || {}) };
+}
+
+function getParallaxStrengthMultiplier() {
+  switch (state.parallaxStrength) {
+    case 'low':
+      return 0.7;
+    case 'high':
+      return 1.35;
+    default:
+      return 1.0;
+  }
 }
 
 function padFrame(frame, digits = 2) {
@@ -546,23 +540,32 @@ function updateTransforms() {
   const maxRad = THREE.MathUtils.degToRad(maxDeg);
   const yawNorm = clamp(state.smoothYaw2D / maxRad, -1, 1);
   const pitchNorm = clamp(state.smoothPitch2D / maxRad, -1, 1);
+  const parallax = getParallaxConfig();
+  const strength = getParallaxStrengthMultiplier();
+  const degToRad = Math.PI / 180;
 
   state.layers.forEach(layerEntry => {
     const { config, element } = layerEntry;
     const depth = config.depth ?? 0.2;
     const translate = config.translate ?? { x: 10, y: 6 };
     const rotate = config.rotate ?? { x: 0.5, y: 0.5 };
-    const scale = state.debugFlags.forceVisible ? 1 : (config.scale ?? 1.05);
+    const depthAmp = Math.pow(clamp(depth, 0, 1), parallax.depthCurve);
+    const baseScale = state.debugFlags.forceVisible ? 1 : (config.scale ?? 1);
+    const scale = state.debugFlags.forceVisible ? 1 : baseScale * parallax.scaleOverscan;
     const opacity = state.debugFlags.forceVisible ? 1 : (config.opacity ?? 1);
     const blendMode = state.debugFlags.forceVisible ? 'normal' : (config.blendMode ?? 'normal');
     const blur = state.debugFlags.forceVisible ? 0 : (config.blur ?? 0);
 
-    const tx = yawNorm * translate.x * depth;
-    const ty = pitchNorm * translate.y * depth;
-    const rx = pitchNorm * rotate.x;
-    const ry = -yawNorm * rotate.y;
+    const translateBase = parallax.translateBasePx * (0.2 + depthAmp * 1.4) * strength;
+    const rotateBase = parallax.rotateBaseDeg * (0.15 + depthAmp * 1.6) * strength;
+    const layerOffsetX = depthAmp * 6;
+    const layerOffsetY = depthAmp * -4;
+    const tx = yawNorm * translateBase * translate.x + layerOffsetX;
+    const ty = pitchNorm * translateBase * translate.y + layerOffsetY;
+    const ry = yawNorm * rotateBase * rotate.y * degToRad;
+    const rx = -pitchNorm * rotateBase * rotate.x * degToRad;
 
-    element.style.transform = `translate3d(${tx}px, ${ty}px, 0px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${scale})`;
+    element.style.transform = `translate3d(${tx}px, ${ty}px, 0px) rotateY(${ry}rad) rotateX(${rx}rad) scale(${scale})`;
     element.style.opacity = opacity;
     element.style.mixBlendMode = blendMode;
     element.style.filter = blur ? `blur(${blur}px)` : 'none';
@@ -590,8 +593,7 @@ function updateStatus() {
     `传感器: ${state.sensorAvailable ? (state.sensorActive ? '已启用' : '未启用') : '不可用'}\n` +
     `兜底拖拽: ${state.useDrag ? '开' : '关'}\n` +
     `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}\n` +
-    `pano url: ${state.panoInfo.url || 'none'}\n` +
-    `build: ${BUILD_ID}` +
+    `pano url: ${state.panoInfo.url || 'none'}` +
     (state.panoError ? `\n${state.panoError}` : '');
 
   if (debugInfoEl && state.config) {
@@ -611,6 +613,10 @@ function updateStatus() {
       lines.push(`  ${status} (${size})`);
     });
     debugInfoEl.textContent = lines.join('\n');
+  }
+
+  if (parallaxSelect) {
+    parallaxSelect.value = state.parallaxStrength;
   }
 }
 
@@ -702,6 +708,17 @@ function toggleDrag() {
   updateStatus();
 }
 
+function toggleDebugPanel() {
+  state.debugPanelOpen = !state.debugPanelOpen;
+  if (debugPanelEl) {
+    debugPanelEl.hidden = !state.debugPanelOpen;
+  }
+  if (debugToggleBtn) {
+    debugToggleBtn.textContent = state.debugPanelOpen ? '关闭 Debug' : 'Debug';
+  }
+  localStorage.setItem('debugPanelOpen', state.debugPanelOpen ? '1' : '0');
+}
+
 function toggleLockUi() {
   state.debugFlags.hideLockUi = !state.debugFlags.hideLockUi;
   lockUi.parentElement.style.display = state.debugFlags.hideLockUi ? 'none' : 'flex';
@@ -721,16 +738,6 @@ function toggleLayerBorders() {
   state.debugFlags.showBorders = !state.debugFlags.showBorders;
   if (debugShowBorderBtn) {
     debugShowBorderBtn.textContent = state.debugFlags.showBorders ? '隐藏边框' : '显示边框';
-  }
-}
-
-function toggleDebugHud() {
-  if (!debugInfoEl) return;
-  const wrapper = debugInfoEl.parentElement;
-  if (!wrapper) return;
-  wrapper.open = !wrapper.open;
-  if (debugToggleBtn) {
-    debugToggleBtn.textContent = wrapper.open ? '收起 Debug HUD' : '展开 Debug HUD';
   }
 }
 
@@ -783,13 +790,56 @@ function handleResize() {
   camera.updateProjectionMatrix();
 }
 
+function initDebugPanel() {
+  state.debugPanelOpen = localStorage.getItem('debugPanelOpen') === '1';
+  if (debugPanelEl) {
+    debugPanelEl.hidden = !state.debugPanelOpen;
+  }
+  if (debugToggleBtn) {
+    debugToggleBtn.textContent = state.debugPanelOpen ? '关闭 Debug' : 'Debug';
+  }
+  if (debugBuildEl) {
+    debugBuildEl.textContent = BUILD_ID;
+  }
+}
+
+function initParallaxStrength() {
+  const saved = localStorage.getItem('parallaxStrength');
+  if (saved) {
+    state.parallaxStrength = saved;
+  }
+  if (parallaxSelect) {
+    parallaxSelect.value = state.parallaxStrength;
+  }
+}
+
+function handleParallaxChange(event) {
+  const value = event.target.value;
+  state.parallaxStrength = value;
+  localStorage.setItem('parallaxStrength', value);
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+    return;
+  }
+  if (!document.documentElement.requestFullscreen) {
+    window.alert('当前浏览器不支持全屏，可通过“添加到主屏幕”获得沉浸全屏。');
+    return;
+  }
+  document.documentElement.requestFullscreen().catch(() => {
+    window.alert('进入全屏失败，可通过“添加到主屏幕”获得沉浸全屏。');
+  });
+}
+
 window.addEventListener('resize', handleResize);
 
 enableGyroBtn.addEventListener('click', enableGyro);
 calibrateBtn.addEventListener('click', calibrate);
 toggleDragBtn.addEventListener('click', toggleDrag);
 if (debugToggleBtn) {
-  debugToggleBtn.addEventListener('click', toggleDebugHud);
+  debugToggleBtn.addEventListener('click', toggleDebugPanel);
 }
 if (debugHideUiBtn) {
   debugHideUiBtn.addEventListener('click', toggleLockUi);
@@ -803,11 +853,19 @@ if (debugShowBorderBtn) {
 if (togglePanoBtn) {
   togglePanoBtn.addEventListener('click', togglePanoMode);
 }
+if (fullscreenBtn) {
+  fullscreenBtn.addEventListener('click', toggleFullscreen);
+}
+if (parallaxSelect) {
+  parallaxSelect.addEventListener('change', handleParallaxChange);
+}
 sceneSelect.addEventListener('change', event => {
   setupScene(event.target.value);
 });
 
 initGyro();
+initDebugPanel();
+initParallaxStrength();
 setupDragFallback();
 loadConfig().then(() => {
   animate();

@@ -124,9 +124,9 @@
           "id": "night_stars",
           "type": "image",
           "src": "assets/overlay/layers/stars.png",
-          "depth": 0.55,
-          "translate": { "x": 10, "y": 6 },
-          "rotate": { "x": 0.4, "y": 0.8 },
+          "depth": 0.1,
+          "translate": { "x": 14, "y": 10 },
+          "rotate": { "x": 0.6, "y": 1.2 },
           "opacity": 0.75,
           "blendMode": "screen",
           "blur": 0.8,
@@ -136,33 +136,33 @@
           "id": "night_meteor",
           "type": "image",
           "src": "assets/overlay/layers/meteor.png",
-          "depth": 0.45,
-          "translate": { "x": 14, "y": 10 },
-          "rotate": { "x": 0.8, "y": 1.2 },
+          "depth": 0.35,
+          "translate": { "x": 20, "y": 14 },
+          "rotate": { "x": 1.1, "y": 1.6 },
           "opacity": 0.65,
           "blendMode": "screen",
           "blur": 0.4,
-          "scale": 1.1
+          "scale": 1.12
         },
         {
           "id": "night_water_reflect",
           "type": "image",
           "src": "assets/overlay/layers/water_reflect.png",
-          "depth": 0.25,
-          "translate": { "x": 18, "y": 16 },
-          "rotate": { "x": 1.2, "y": 1.6 },
+          "depth": 0.65,
+          "translate": { "x": 26, "y": 20 },
+          "rotate": { "x": 1.6, "y": 2.2 },
           "opacity": 0.7,
           "blendMode": "screen",
           "blur": 0.6,
-          "scale": 1.12
+          "scale": 1.14
         },
         {
           "id": "night_moon",
           "type": "image",
           "src": "assets/overlay/layers/moon.png",
-          "depth": 0.15,
-          "translate": { "x": 24, "y": 14 },
-          "rotate": { "x": 1.8, "y": 2.4 },
+          "depth": 0.95,
+          "translate": { "x": 32, "y": 22 },
+          "rotate": { "x": 2.2, "y": 3.0 },
           "opacity": 0.95,
           "blendMode": "normal",
           "blur": 0,
@@ -175,6 +175,12 @@
         "opacity": 0.9
       }
     }
+  },
+  "parallax": {
+    "translateBasePx": 22,
+    "rotateBaseDeg": 3.0,
+    "scaleOverscan": 1.18,
+    "depthCurve": 1.35
   },
   "calibration": {
     "maxDeg": 45,
