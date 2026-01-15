@@ -17,7 +17,8 @@ const state = {
   panoCache: new Map(),
   panoImageCache: new Map(),
   panoOverrides: new Map(),
-  panoInfo: { type: 'color', size: '' },
+  panoInfo: { type: 'color', size: '', url: '' },
+  panoError: '',
   layers: [],
   frameState: new Map(),
   spriteState: new Map(),
@@ -275,6 +276,7 @@ function applyPanoTexture(texture, info) {
   sphereMat.needsUpdate = true;
   state.panoTexture = texture;
   state.panoInfo = info;
+  state.panoError = '';
 }
 
 function applyPanoFallback() {
@@ -282,10 +284,20 @@ function applyPanoFallback() {
   sphereMat.color.setHex(0x111111);
   sphereMat.needsUpdate = true;
   state.panoTexture = null;
-  state.panoInfo = { type: 'color', size: '' };
+  state.panoInfo = { type: 'color', size: '', url: '' };
+  state.panoError = '';
 }
 
-function loadImageTexture(src, sceneKey) {
+function applyPanoError(url) {
+  sphereMat.map = null;
+  sphereMat.color.setHex(0x0b1c3a);
+  sphereMat.needsUpdate = true;
+  state.panoTexture = null;
+  state.panoInfo = { type: 'color', size: '', url };
+  state.panoError = `pano load failed: ${url}`;
+}
+
+function loadImageTexture(src) {
   if (state.panoImageCache.has(src)) {
     return Promise.resolve(state.panoImageCache.get(src));
   }
@@ -293,11 +305,7 @@ function loadImageTexture(src, sceneKey) {
     const loader = new THREE.TextureLoader();
     loader.load(src, texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
-      const width = texture.image?.width || 0;
-      const height = texture.image?.height || 0;
-      const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
-      const pot = isPowerOfTwo(width) && isPowerOfTwo(height);
-      texture.wrapS = pot ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
@@ -328,7 +336,17 @@ function setupScene(sceneKey) {
   const panoOptions = getScenePanoOptions(sceneKey, sceneConfig);
   updatePanoToggle(panoOptions.hasGradient, panoOptions.hasImage, panoOptions.desiredType);
 
-  if (panoOptions.desiredType === 'gradient' && panoOptions.panoConfig?.type === 'gradient') {
+  if (panoOptions.imageSrc) {
+    const panoUrl = panoOptions.imageSrc;
+    loadImageTexture(panoUrl).then(texture => {
+      if (!texture) {
+        applyPanoError(panoUrl);
+        return;
+      }
+      const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+      applyPanoTexture(texture, { type: 'image', size: sizeLabel, url: panoUrl });
+    });
+  } else if (panoOptions.desiredType === 'gradient' && panoOptions.panoConfig?.type === 'gradient') {
     if (state.panoCache.has(sceneKey)) {
       const cached = state.panoCache.get(sceneKey);
       applyPanoTexture(cached.texture, cached.info);
@@ -337,25 +355,22 @@ function setupScene(sceneKey) {
       const texture = createGradientEquirectTexture(panoOptions.panoConfig, renderer, seed);
       if (texture) {
         const sizeLabel = `${texture.image.width}x${texture.image.height}`;
-        const info = { type: 'gradient', size: sizeLabel };
+        const info = { type: 'gradient', size: sizeLabel, url: '' };
         state.panoCache.set(sceneKey, { texture, info });
         applyPanoTexture(texture, info);
       } else if (panoOptions.hasImage && panoOptions.imageSrc) {
-        loadImageTexture(panoOptions.imageSrc, sceneKey).then(texture => {
-          if (!texture) return applyPanoFallback();
+        loadImageTexture(panoOptions.imageSrc).then(texture => {
+          if (!texture) {
+            applyPanoError(panoOptions.imageSrc);
+            return;
+          }
           const sizeLabel = `${texture.image.width}x${texture.image.height}`;
-          applyPanoTexture(texture, { type: 'image', size: sizeLabel });
+          applyPanoTexture(texture, { type: 'image', size: sizeLabel, url: panoOptions.imageSrc });
         });
       } else {
         applyPanoFallback();
       }
     }
-  } else if (panoOptions.desiredType === 'image' && panoOptions.imageSrc) {
-    loadImageTexture(panoOptions.imageSrc, sceneKey).then(texture => {
-      if (!texture) return applyPanoFallback();
-      const sizeLabel = `${texture.image.width}x${texture.image.height}`;
-      applyPanoTexture(texture, { type: 'image', size: sizeLabel });
-    });
   } else {
     applyPanoFallback();
   }
@@ -503,7 +518,9 @@ function updateStatus() {
     `pitch: ${state.smoothPitch3D.toFixed(3)} rad\n` +
     `传感器: ${state.sensorAvailable ? (state.sensorActive ? '已启用' : '未启用') : '不可用'}\n` +
     `兜底拖拽: ${state.useDrag ? '开' : '关'}\n` +
-    `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}`;
+    `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}\n` +
+    `pano url: ${state.panoInfo.url || 'none'}` +
+    (state.panoError ? `\n${state.panoError}` : '');
 }
 
 function onDeviceOrientation(event) {

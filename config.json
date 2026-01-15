@@ -114,22 +114,10 @@
       }
     },
     "night": {
-      "panoSrc": "assets/pano/night.svg",
+      "panoSrc": "assets/pano/night_pano.png",
       "pano": {
-        "type": "gradient",
-        "size": { "w": 2048, "h": 1024 },
-        "direction": 180,
-        "stops": [
-          { "pos": 0.0, "color": "#020C1D" },
-          { "pos": 0.22, "color": "#1F2444" },
-          { "pos": 0.33, "color": "#323A66" },
-          { "pos": 0.53, "color": "#2D3961" },
-          { "pos": 0.76, "color": "#1E2D56" },
-          { "pos": 1.0, "color": "#19264A" }
-        ],
-        "gamma": 1.0,
-        "dither": 0.0,
-        "wrap": "repeat"
+        "type": "image",
+        "src": "assets/pano/night_pano.png"
       },
       "layers": [
         {
