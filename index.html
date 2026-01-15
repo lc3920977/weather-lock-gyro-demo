@@ -2,7 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Weather Lock Gyro Demo</title>
   <style>
     html, body {
@@ -27,6 +31,7 @@
       width: 100%;
       height: 100%;
       display: block;
+      z-index: 0;
     }
     #overlayStage {
       position: absolute;
@@ -34,10 +39,13 @@
       pointer-events: none;
       transform-style: preserve-3d;
       will-change: transform;
+      z-index: 1;
     }
     .layer {
       position: absolute;
       inset: 0;
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -46,7 +54,7 @@
     .layer img {
       max-width: 140%;
       max-height: 140%;
-      object-fit: contain;
+      object-fit: cover;
       pointer-events: none;
       user-select: none;
     }
@@ -58,6 +66,7 @@
       justify-content: center;
       pointer-events: none;
       will-change: transform, opacity;
+      z-index: 2;
     }
     #lockUi img {
       width: auto;
@@ -67,8 +76,8 @@
     }
     #hud {
       position: absolute;
-      left: 16px;
-      bottom: 16px;
+      left: calc(16px + env(safe-area-inset-left));
+      bottom: calc(16px + env(safe-area-inset-bottom));
       background: rgba(0,0,0,0.45);
       padding: 12px 14px;
       border-radius: 12px;
@@ -76,6 +85,34 @@
       gap: 8px;
       width: min(320px, 90vw);
       backdrop-filter: blur(6px);
+      z-index: 3;
+    }
+    #debugPanel {
+      position: absolute;
+      right: calc(16px + env(safe-area-inset-right));
+      bottom: calc(16px + env(safe-area-inset-bottom));
+      width: min(420px, 92vw);
+      background: rgba(12, 16, 30, 0.92);
+      border-radius: 12px;
+      padding: 12px 14px;
+      color: #cfe3ff;
+      z-index: 4;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+    #debugPanel h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      color: #fff;
+    }
+    #debugPanel .meta {
+      font-size: 12px;
+      color: #93a4c4;
+      margin-bottom: 8px;
+    }
+    #debugPanel pre {
+      margin: 8px 0 0;
+      font-size: 12px;
+      white-space: pre-wrap;
     }
     #hud button, #hud select {
       width: 100%;
@@ -97,15 +134,49 @@
       color: #cfd8ff;
       white-space: pre-line;
     }
+    #hudToggle {
+      position: absolute;
+      top: calc(12px + env(safe-area-inset-top));
+      right: calc(12px + env(safe-area-inset-right));
+      width: 36px;
+      height: 36px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,30,0.7);
+      color: #fff;
+      font-size: 18px;
+      z-index: 4;
+    }
+    #hudToggle:active {
+      transform: scale(0.98);
+    }
+    #debugHud {
+      background: rgba(12, 16, 30, 0.8);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #cfe3ff;
+    }
+    #debugHud summary {
+      cursor: pointer;
+      font-size: 13px;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    #debugHud pre {
+      margin: 6px 0 0;
+      white-space: pre-wrap;
+    }
     #hint {
       position: absolute;
-      top: 16px;
-      right: 16px;
+      top: calc(16px + env(safe-area-inset-top));
+      right: calc(16px + env(safe-area-inset-right));
       background: rgba(0,0,0,0.4);
       padding: 8px 12px;
       border-radius: 10px;
       font-size: 12px;
       color: #d8dcff;
+      z-index: 3;
     }
   </style>
 </head>
@@ -121,7 +192,31 @@
         <button id="toggleDrag">拖拽兜底：开</button>
       </div>
       <select id="sceneSelect"></select>
+      <select id="parallaxStrength">
+        <option value="low">Parallax: Low</option>
+        <option value="med" selected>Parallax: Med</option>
+        <option value="high">Parallax: High</option>
+      </select>
+      <div class="row">
+        <button id="enterFullscreen">全屏</button>
+        <button id="toggleDebugPanel">Debug</button>
+      </div>
+      <button id="togglePano" hidden>切换为图片</button>
       <div id="status"></div>
+    </div>
+    <button id="hudToggle" aria-label="Toggle HUD">≡</button>
+    <div id="debugPanel" hidden>
+      <h3>Debug 面板</h3>
+      <div class="meta">BUILD_ID: <span id="debugBuild"></span></div>
+      <div class="row">
+        <button id="toggleLockUi">隐藏 Lock UI</button>
+        <button id="toggleForceVisible">强制可见模式</button>
+      </div>
+      <div class="row">
+        <button id="toggleLayerBorders">显示边框</button>
+      </div>
+      <pre id="debugStatus"></pre>
+      <pre id="debugInfo"></pre>
     </div>
     <div id="hint">拖拽屏幕可模拟陀螺仪</div>
   </div>
