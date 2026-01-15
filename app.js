@@ -6,6 +6,7 @@ const lockUi = document.querySelector('#lockUi img');
 const enableGyroBtn = document.getElementById('enableGyro');
 const calibrateBtn = document.getElementById('calibrate');
 const toggleDragBtn = document.getElementById('toggleDrag');
+const togglePanoBtn = document.getElementById('togglePano');
 const sceneSelect = document.getElementById('sceneSelect');
 const statusEl = document.getElementById('status');
 
@@ -13,6 +14,10 @@ const state = {
   config: null,
   sceneKey: 'day_clear',
   panoTexture: null,
+  panoCache: new Map(),
+  panoImageCache: new Map(),
+  panoOverrides: new Map(),
+  panoInfo: { type: 'color', size: '' },
   layers: [],
   frameState: new Map(),
   spriteState: new Map(),
@@ -45,6 +50,140 @@ scene.add(sphereMesh);
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function hashStringToSeed(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function rand() {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), t | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967295;
+  };
+}
+
+function parseHexColor(hex) {
+  const value = hex.replace('#', '');
+  const normalized = value.length === 3
+    ? value.split('').map(ch => ch + ch).join('')
+    : value.padEnd(6, '0');
+  const num = Number.parseInt(normalized, 16);
+  return {
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255
+  };
+}
+
+function buildGradientLut(stops, size, gamma) {
+  const sorted = stops.slice().sort((a, b) => a.pos - b.pos);
+  const lut = new Array(size).fill(null);
+  let stopIndex = 0;
+  for (let i = 0; i < size; i += 1) {
+    const t = i / (size - 1);
+    while (stopIndex < sorted.length - 2 && t > sorted[stopIndex + 1].pos) {
+      stopIndex += 1;
+    }
+    const left = sorted[stopIndex];
+    const right = sorted[Math.min(stopIndex + 1, sorted.length - 1)];
+    const span = right.pos - left.pos || 1;
+    const localT = clamp((t - left.pos) / span, 0, 1);
+    const adjustedT = gamma !== 1 ? Math.pow(localT, gamma) : localT;
+    const leftColor = parseHexColor(left.color);
+    const rightColor = parseHexColor(right.color);
+    lut[i] = {
+      r: Math.round(lerp(leftColor.r, rightColor.r, adjustedT)),
+      g: Math.round(lerp(leftColor.g, rightColor.g, adjustedT)),
+      b: Math.round(lerp(leftColor.b, rightColor.b, adjustedT))
+    };
+  }
+  return lut;
+}
+
+function createGradientEquirectTexture(panoConfig, renderer, seed) {
+  const width = Math.max(2, panoConfig.size?.w ?? 2048);
+  const height = Math.max(2, panoConfig.size?.h ?? 1024);
+  const direction = panoConfig.direction ?? 180;
+  const stops = Array.isArray(panoConfig.stops) && panoConfig.stops.length > 0
+    ? panoConfig.stops
+    : [{ pos: 0, color: '#000000' }, { pos: 1, color: '#222233' }];
+  const gamma = panoConfig.gamma ?? 1;
+  const dither = panoConfig.dither ?? 0;
+
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = width;
+  canvasEl.height = height;
+  const ctx = canvasEl.getContext('2d');
+  if (!ctx) return null;
+
+  const imageData = ctx.createImageData(width, height);
+  const data = imageData.data;
+  const rad = (direction * Math.PI) / 180;
+  const vx = Math.sin(rad);
+  const vy = -Math.cos(rad);
+  const halfDiag = Math.sqrt(width * width + height * height) / 2;
+  const cx = width / 2;
+  const cy = height / 2;
+  const startX = cx - vx * halfDiag;
+  const startY = cy - vy * halfDiag;
+  const endX = cx + vx * halfDiag;
+  const endY = cy + vy * halfDiag;
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const denom = dx * dx + dy * dy || 1;
+  const lutSize = Math.max(512, Math.round(width * 0.75));
+  const lut = buildGradientLut(stops, lutSize, gamma);
+  const rng = dither > 0 ? mulberry32(seed) : null;
+  const ditherAmount = dither > 0 ? dither * 255 : 0;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const t = clamp(((x - startX) * dx + (y - startY) * dy) / denom, 0, 1);
+      const lutIndex = Math.round(t * (lutSize - 1));
+      const color = lut[lutIndex];
+      let r = color.r;
+      let g = color.g;
+      let b = color.b;
+      if (rng) {
+        const noise = (rng() * 2 - 1) * ditherAmount;
+        r = clamp(Math.round(r + noise), 0, 255);
+        g = clamp(Math.round(g + noise), 0, 255);
+        b = clamp(Math.round(b + noise), 0, 255);
+      }
+      const index = (y * width + x) * 4;
+      data[index] = r;
+      data[index + 1] = g;
+      data[index + 2] = b;
+      data[index + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvasEl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  texture.wrapS = panoConfig.wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+  texture.wrapT = panoConfig.wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  const maxAniso = renderer.capabilities.getMaxAnisotropy?.() ?? 1;
+  texture.anisotropy = Math.min(4, Math.max(1, maxAniso));
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function padFrame(frame, digits = 2) {
@@ -80,19 +219,114 @@ function createLayerElement(layer) {
   return wrapper;
 }
 
+function getScenePanoOptions(sceneKey, sceneConfig) {
+  const panoConfig = sceneConfig.pano || null;
+  const hasGradient = panoConfig?.type === 'gradient';
+  const imageSrc = panoConfig?.type === 'image' ? panoConfig.src : sceneConfig.panoSrc;
+  const hasImage = Boolean(imageSrc);
+  const override = state.panoOverrides.get(sceneKey);
+  const desiredType = override && ((override === 'gradient' && hasGradient) || (override === 'image' && hasImage))
+    ? override
+    : (hasGradient ? 'gradient' : (hasImage ? 'image' : 'color'));
+  return {
+    panoConfig,
+    hasGradient,
+    hasImage,
+    imageSrc,
+    desiredType
+  };
+}
+
+function applyPanoTexture(texture, info) {
+  sphereMat.map = texture;
+  sphereMat.needsUpdate = true;
+  state.panoTexture = texture;
+  state.panoInfo = info;
+}
+
+function applyPanoFallback() {
+  sphereMat.map = null;
+  sphereMat.color.setHex(0x111111);
+  sphereMat.needsUpdate = true;
+  state.panoTexture = null;
+  state.panoInfo = { type: 'color', size: '' };
+}
+
+function loadImageTexture(src, sceneKey) {
+  if (state.panoImageCache.has(src)) {
+    return Promise.resolve(state.panoImageCache.get(src));
+  }
+  return new Promise(resolve => {
+    const loader = new THREE.TextureLoader();
+    loader.load(src, texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      const width = texture.image?.width || 0;
+      const height = texture.image?.height || 0;
+      const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
+      const pot = isPowerOfTwo(width) && isPowerOfTwo(height);
+      texture.wrapS = pot ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      const maxAniso = renderer.capabilities.getMaxAnisotropy?.() ?? 1;
+      texture.anisotropy = Math.min(4, Math.max(1, maxAniso));
+      state.panoImageCache.set(src, texture);
+      resolve(texture);
+    }, undefined, () => resolve(null));
+  });
+}
+
+function updatePanoToggle(hasGradient, hasImage, desiredType) {
+  if (!togglePanoBtn) return;
+  if (hasGradient && hasImage) {
+    togglePanoBtn.hidden = false;
+    const nextLabel = desiredType === 'gradient' ? '切换为图片' : '切换为渐变';
+    togglePanoBtn.textContent = nextLabel;
+  } else {
+    togglePanoBtn.hidden = true;
+  }
+}
+
 function setupScene(sceneKey) {
   const sceneConfig = state.config.scenes[sceneKey];
   if (!sceneConfig) return;
   state.sceneKey = sceneKey;
 
-  const loader = new THREE.TextureLoader();
-  loader.load(sceneConfig.panoSrc, texture => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.mapping = THREE.EquirectangularReflectionMapping;
-    sphereMat.map = texture;
-    sphereMat.needsUpdate = true;
-    state.panoTexture = texture;
-  });
+  const panoOptions = getScenePanoOptions(sceneKey, sceneConfig);
+  updatePanoToggle(panoOptions.hasGradient, panoOptions.hasImage, panoOptions.desiredType);
+
+  if (panoOptions.desiredType === 'gradient' && panoOptions.panoConfig?.type === 'gradient') {
+    if (state.panoCache.has(sceneKey)) {
+      const cached = state.panoCache.get(sceneKey);
+      applyPanoTexture(cached.texture, cached.info);
+    } else {
+      const seed = hashStringToSeed(sceneKey);
+      const texture = createGradientEquirectTexture(panoOptions.panoConfig, renderer, seed);
+      if (texture) {
+        const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+        const info = { type: 'gradient', size: sizeLabel };
+        state.panoCache.set(sceneKey, { texture, info });
+        applyPanoTexture(texture, info);
+      } else if (panoOptions.hasImage && panoOptions.imageSrc) {
+        loadImageTexture(panoOptions.imageSrc, sceneKey).then(texture => {
+          if (!texture) return applyPanoFallback();
+          const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+          applyPanoTexture(texture, { type: 'image', size: sizeLabel });
+        });
+      } else {
+        applyPanoFallback();
+      }
+    }
+  } else if (panoOptions.desiredType === 'image' && panoOptions.imageSrc) {
+    loadImageTexture(panoOptions.imageSrc, sceneKey).then(texture => {
+      if (!texture) return applyPanoFallback();
+      const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+      applyPanoTexture(texture, { type: 'image', size: sizeLabel });
+    });
+  } else {
+    applyPanoFallback();
+  }
 
   overlayStage.innerHTML = '';
   state.layers = [];
@@ -236,7 +470,8 @@ function updateStatus() {
   statusEl.textContent = `yaw: ${state.smoothYaw3D.toFixed(3)} rad\n` +
     `pitch: ${state.smoothPitch3D.toFixed(3)} rad\n` +
     `传感器: ${state.sensorAvailable ? (state.sensorActive ? '已启用' : '未启用') : '不可用'}\n` +
-    `兜底拖拽: ${state.useDrag ? '开' : '关'}`;
+    `兜底拖拽: ${state.useDrag ? '开' : '关'}\n` +
+    `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}`;
 }
 
 function onDeviceOrientation(event) {
@@ -327,6 +562,15 @@ function toggleDrag() {
   updateStatus();
 }
 
+function togglePanoMode() {
+  const sceneConfig = state.config.scenes[state.sceneKey];
+  const options = getScenePanoOptions(state.sceneKey, sceneConfig);
+  if (!options.hasGradient || !options.hasImage) return;
+  const nextType = options.desiredType === 'gradient' ? 'image' : 'gradient';
+  state.panoOverrides.set(state.sceneKey, nextType);
+  setupScene(state.sceneKey);
+}
+
 function calibrate() {
   state.zeroYaw = state.smoothYaw3D;
   state.zeroPitch = state.smoothPitch3D;
@@ -372,6 +616,9 @@ window.addEventListener('resize', handleResize);
 enableGyroBtn.addEventListener('click', enableGyro);
 calibrateBtn.addEventListener('click', calibrate);
 toggleDragBtn.addEventListener('click', toggleDrag);
+if (togglePanoBtn) {
+  togglePanoBtn.addEventListener('click', togglePanoMode);
+}
 sceneSelect.addEventListener('change', event => {
   setupScene(event.target.value);
 });
