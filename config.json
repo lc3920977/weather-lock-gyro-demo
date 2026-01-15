@@ -75,7 +75,11 @@
       }
     },
     "night": {
-      "panoSrc": "assets/pano/night.svg",
+      "panoSrc": "assets/pano/night_pano.png",
+      "pano": {
+        "type": "image",
+        "src": "assets/pano/night_pano.png"
+      },
       "layers": [
         {
           "id": "night_mist",
