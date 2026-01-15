@@ -239,6 +239,7 @@ function getScenePanoOptions(sceneKey, sceneConfig) {
 
 function applyPanoTexture(texture, info) {
   sphereMat.map = texture;
+  sphereMat.color.setHex(0xffffff);
   sphereMat.needsUpdate = true;
   state.panoTexture = texture;
   state.panoInfo = info;
