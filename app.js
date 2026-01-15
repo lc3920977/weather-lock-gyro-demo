@@ -208,7 +208,6 @@ function createGradientEquirectTexture(panoConfig, renderer, seed) {
 
   const texture = new THREE.CanvasTexture(canvasEl);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.mapping = THREE.EquirectangularReflectionMapping;
   texture.wrapS = panoConfig.wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
   texture.wrapT = panoConfig.wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
   texture.minFilter = THREE.LinearFilter;
@@ -294,7 +293,6 @@ function loadImageTexture(src, sceneKey) {
     const loader = new THREE.TextureLoader();
     loader.load(src, texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
-      texture.mapping = THREE.EquirectangularReflectionMapping;
       const width = texture.image?.width || 0;
       const height = texture.image?.height || 0;
       const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
