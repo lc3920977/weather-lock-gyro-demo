@@ -1,5 +1,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js';
 
+const BUILD_ID = '20260115-1';
+
 const canvas = document.getElementById('threeCanvas');
 const overlayStage = document.getElementById('overlayStage');
 const lockUi = document.querySelector('#lockUi img');
@@ -9,6 +11,11 @@ const toggleDragBtn = document.getElementById('toggleDrag');
 const togglePanoBtn = document.getElementById('togglePano');
 const sceneSelect = document.getElementById('sceneSelect');
 const statusEl = document.getElementById('status');
+const debugInfoEl = document.getElementById('debugInfo');
+const debugToggleBtn = document.getElementById('toggleDebugHud');
+const debugHideUiBtn = document.getElementById('toggleLockUi');
+const debugForceVisibleBtn = document.getElementById('toggleForceVisible');
+const debugShowBorderBtn = document.getElementById('toggleLayerBorders');
 
 const state = {
   config: null,
@@ -19,6 +26,12 @@ const state = {
   panoOverrides: new Map(),
   panoInfo: { type: 'color', size: '', url: '' },
   panoError: '',
+  layerDebug: new Map(),
+  debugFlags: {
+    hideLockUi: false,
+    forceVisible: false,
+    showBorders: false
+  },
   layers: [],
   frameState: new Map(),
   spriteState: new Map(),
@@ -48,6 +61,7 @@ const sphereGeo = new THREE.SphereGeometry(50, 64, 64);
 const sphereMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.BackSide });
 const sphereMesh = new THREE.Mesh(sphereGeo, sphereMat);
 scene.add(sphereMesh);
+document.title = `${document.title} (${BUILD_ID})`;
 
 const DEFAULT_GRADIENT = {
   width: 1024,
@@ -219,8 +233,38 @@ function createGradientEquirectTexture(panoConfig, renderer, seed) {
   return texture;
 }
 
+function buildUrl(src) {
+  if (!src) return '';
+  return `${src}?v=${BUILD_ID}`;
+}
+
 function padFrame(frame, digits = 2) {
   return String(frame).padStart(digits, '0');
+}
+
+function setLayerDebug(layerId, updates) {
+  const current = state.layerDebug.get(layerId) || {};
+  state.layerDebug.set(layerId, { ...current, ...updates });
+}
+
+function registerImageDebug(layerId, element, src) {
+  setLayerDebug(layerId, { src, status: 'loading' });
+  element.addEventListener('load', () => {
+    setLayerDebug(layerId, {
+      src: element.currentSrc || element.src,
+      status: 'loaded',
+      width: element.naturalWidth || 0,
+      height: element.naturalHeight || 0
+    });
+  });
+  element.addEventListener('error', () => {
+    setLayerDebug(layerId, {
+      src: element.currentSrc || element.src,
+      status: 'error',
+      width: 0,
+      height: 0
+    });
+  });
 }
 
 function createLayerElement(layer) {
@@ -236,17 +280,33 @@ function createLayerElement(layer) {
     img.alt = layer.id;
     img.decoding = 'async';
     img.loading = 'lazy';
-    img.src = layer.src || '';
+    img.src = buildUrl(layer.src || '');
+    registerImageDebug(layer.id, img, img.src);
     wrapper.appendChild(img);
   }
 
   if (layer.type === 'sprite') {
-    wrapper.style.backgroundImage = `url(${layer.src})`;
+    const spriteUrl = buildUrl(layer.src);
+    wrapper.style.backgroundImage = `url(${spriteUrl})`;
     wrapper.style.backgroundRepeat = 'no-repeat';
     wrapper.style.backgroundPosition = '0px 0px';
     wrapper.style.backgroundSize = layer.direction === 'horizontal'
       ? `${layer.frameWidth * layer.frames}px ${layer.frameHeight}px`
       : `${layer.frameWidth}px ${layer.frameHeight * layer.frames}px`;
+    setLayerDebug(layer.id, { src: spriteUrl, status: 'loading' });
+    const probe = new Image();
+    probe.onload = () => {
+      setLayerDebug(layer.id, {
+        src: spriteUrl,
+        status: 'loaded',
+        width: probe.naturalWidth || 0,
+        height: probe.naturalHeight || 0
+      });
+    };
+    probe.onerror = () => {
+      setLayerDebug(layer.id, { src: spriteUrl, status: 'error', width: 0, height: 0 });
+    };
+    probe.src = spriteUrl;
   }
 
   return wrapper;
@@ -337,7 +397,7 @@ function setupScene(sceneKey) {
   updatePanoToggle(panoOptions.hasGradient, panoOptions.hasImage, panoOptions.desiredType);
 
   if (panoOptions.imageSrc) {
-    const panoUrl = panoOptions.imageSrc;
+    const panoUrl = buildUrl(panoOptions.imageSrc);
     loadImageTexture(panoUrl).then(texture => {
       if (!texture) {
         applyPanoError(panoUrl);
@@ -359,13 +419,14 @@ function setupScene(sceneKey) {
         state.panoCache.set(sceneKey, { texture, info });
         applyPanoTexture(texture, info);
       } else if (panoOptions.hasImage && panoOptions.imageSrc) {
-        loadImageTexture(panoOptions.imageSrc).then(texture => {
+        const panoUrl = buildUrl(panoOptions.imageSrc);
+        loadImageTexture(panoUrl).then(texture => {
           if (!texture) {
-            applyPanoError(panoOptions.imageSrc);
+            applyPanoError(panoUrl);
             return;
           }
           const sizeLabel = `${texture.image.width}x${texture.image.height}`;
-          applyPanoTexture(texture, { type: 'image', size: sizeLabel, url: panoOptions.imageSrc });
+          applyPanoTexture(texture, { type: 'image', size: sizeLabel, url: panoUrl });
         });
       } else {
         applyPanoFallback();
@@ -396,7 +457,7 @@ function setupScene(sceneKey) {
       const img = element.querySelector('img');
       if (img) {
         const frameId = padFrame(layer.start);
-        img.src = layer.framePattern.replace('{frame}', frameId);
+        img.src = buildUrl(layer.framePattern.replace('{frame}', frameId));
       }
     }
 
@@ -408,12 +469,12 @@ function setupScene(sceneKey) {
     }
   });
 
-  lockUi.src = sceneConfig.ui.src;
+  lockUi.src = buildUrl(sceneConfig.ui.src);
   lockUi.parentElement.style.opacity = sceneConfig.ui.opacity ?? 1;
 }
 
 function loadConfig() {
-  return fetch('./config.json').then(res => res.json()).then(config => {
+  return fetch(`./config.json?v=${BUILD_ID}`, { cache: 'no-store' }).then(res => res.json()).then(config => {
     state.config = config;
     sceneSelect.innerHTML = '';
     Object.keys(config.scenes).forEach(key => {
@@ -442,9 +503,12 @@ function updateFrames(delta) {
         frameState.current = config.start;
       }
       const frameId = padFrame(frameState.current);
-      const src = config.framePattern.replace('{frame}', frameId);
+      const src = buildUrl(config.framePattern.replace('{frame}', frameId));
       const img = element.querySelector('img');
-      if (img) img.src = src;
+      if (img) {
+        img.src = src;
+        setLayerDebug(config.id, { src });
+      }
 
       const cacheFrames = [frameState.current - 2, frameState.current - 1, frameState.current + 1, frameState.current + 2];
       cacheFrames.forEach(frame => {
@@ -452,7 +516,7 @@ function updateFrames(delta) {
         if (target < config.start) target = config.end - (config.start - target) + 1;
         if (target > config.end) target = config.start + (target - config.end) - 1;
         const cached = new Image();
-        cached.src = config.framePattern.replace('{frame}', padFrame(target));
+        cached.src = buildUrl(config.framePattern.replace('{frame}', padFrame(target)));
       });
     }
   });
@@ -488,7 +552,10 @@ function updateTransforms() {
     const depth = config.depth ?? 0.2;
     const translate = config.translate ?? { x: 10, y: 6 };
     const rotate = config.rotate ?? { x: 0.5, y: 0.5 };
-    const scale = config.scale ?? 1.05;
+    const scale = state.debugFlags.forceVisible ? 1 : (config.scale ?? 1.05);
+    const opacity = state.debugFlags.forceVisible ? 1 : (config.opacity ?? 1);
+    const blendMode = state.debugFlags.forceVisible ? 'normal' : (config.blendMode ?? 'normal');
+    const blur = state.debugFlags.forceVisible ? 0 : (config.blur ?? 0);
 
     const tx = yawNorm * translate.x * depth;
     const ty = pitchNorm * translate.y * depth;
@@ -496,6 +563,10 @@ function updateTransforms() {
     const ry = -yawNorm * rotate.y;
 
     element.style.transform = `translate3d(${tx}px, ${ty}px, 0px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${scale})`;
+    element.style.opacity = opacity;
+    element.style.mixBlendMode = blendMode;
+    element.style.filter = blur ? `blur(${blur}px)` : 'none';
+    element.style.outline = state.debugFlags.showBorders ? '1px solid rgba(0, 200, 255, 0.8)' : 'none';
   });
 
   const uiConfig = state.config.scenes[state.sceneKey].ui;
@@ -519,8 +590,28 @@ function updateStatus() {
     `传感器: ${state.sensorAvailable ? (state.sensorActive ? '已启用' : '未启用') : '不可用'}\n` +
     `兜底拖拽: ${state.useDrag ? '开' : '关'}\n` +
     `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}\n` +
-    `pano url: ${state.panoInfo.url || 'none'}` +
+    `pano url: ${state.panoInfo.url || 'none'}\n` +
+    `build: ${BUILD_ID}` +
     (state.panoError ? `\n${state.panoError}` : '');
+
+  if (debugInfoEl && state.config) {
+    const sceneKey = state.sceneKey;
+    const sceneConfig = state.config.scenes[sceneKey];
+    const layerCount = overlayStage.children.length;
+    const lines = [];
+    lines.push(`scene: ${sceneKey}`);
+    lines.push(`overlay DOM count: ${layerCount}`);
+    lines.push('layers:');
+    sceneConfig.layers.forEach(layer => {
+      const debug = state.layerDebug.get(layer.id) || {};
+      const status = debug.status === 'loaded' ? '✅loaded' : (debug.status === 'error' ? '❌error' : '…loading');
+      const size = debug.width && debug.height ? `${debug.width}x${debug.height}` : '0x0';
+      const src = debug.src || buildUrl(layer.src || '');
+      lines.push(`- ${layer.id} | ${layer.type} | ${src} | opacity:${layer.opacity ?? 1} | blend:${layer.blendMode ?? 'normal'} | depth:${layer.depth ?? 0}`);
+      lines.push(`  ${status} (${size})`);
+    });
+    debugInfoEl.textContent = lines.join('\n');
+  }
 }
 
 function onDeviceOrientation(event) {
@@ -611,6 +702,38 @@ function toggleDrag() {
   updateStatus();
 }
 
+function toggleLockUi() {
+  state.debugFlags.hideLockUi = !state.debugFlags.hideLockUi;
+  lockUi.parentElement.style.display = state.debugFlags.hideLockUi ? 'none' : 'flex';
+  if (debugHideUiBtn) {
+    debugHideUiBtn.textContent = state.debugFlags.hideLockUi ? '显示 Lock UI' : '隐藏 Lock UI';
+  }
+}
+
+function toggleForceVisible() {
+  state.debugFlags.forceVisible = !state.debugFlags.forceVisible;
+  if (debugForceVisibleBtn) {
+    debugForceVisibleBtn.textContent = state.debugFlags.forceVisible ? '恢复正常模式' : '强制可见模式';
+  }
+}
+
+function toggleLayerBorders() {
+  state.debugFlags.showBorders = !state.debugFlags.showBorders;
+  if (debugShowBorderBtn) {
+    debugShowBorderBtn.textContent = state.debugFlags.showBorders ? '隐藏边框' : '显示边框';
+  }
+}
+
+function toggleDebugHud() {
+  if (!debugInfoEl) return;
+  const wrapper = debugInfoEl.parentElement;
+  if (!wrapper) return;
+  wrapper.open = !wrapper.open;
+  if (debugToggleBtn) {
+    debugToggleBtn.textContent = wrapper.open ? '收起 Debug HUD' : '展开 Debug HUD';
+  }
+}
+
 function togglePanoMode() {
   const sceneConfig = state.config.scenes[state.sceneKey];
   const options = getScenePanoOptions(state.sceneKey, sceneConfig);
@@ -665,6 +788,18 @@ window.addEventListener('resize', handleResize);
 enableGyroBtn.addEventListener('click', enableGyro);
 calibrateBtn.addEventListener('click', calibrate);
 toggleDragBtn.addEventListener('click', toggleDrag);
+if (debugToggleBtn) {
+  debugToggleBtn.addEventListener('click', toggleDebugHud);
+}
+if (debugHideUiBtn) {
+  debugHideUiBtn.addEventListener('click', toggleLockUi);
+}
+if (debugForceVisibleBtn) {
+  debugForceVisibleBtn.addEventListener('click', toggleForceVisible);
+}
+if (debugShowBorderBtn) {
+  debugShowBorderBtn.addEventListener('click', toggleLayerBorders);
+}
 if (togglePanoBtn) {
   togglePanoBtn.addEventListener('click', togglePanoMode);
 }
