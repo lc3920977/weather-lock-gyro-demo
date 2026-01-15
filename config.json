@@ -2,6 +2,19 @@
   "scenes": {
     "day_clear": {
       "panoSrc": "assets/pano/day_clear.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#8ac8ff" },
+            { "pos": 0.45, "color": "#b9e1ff" },
+            { "pos": 0.75, "color": "#dff2ff" },
+            { "pos": 1, "color": "#f7fbff" }
+          ],
+          "hazeNoise": { "enabled": false, "opacity": 0.03 }
+        }
+      },
       "layers": [
         {
           "id": "clouds_frames",
@@ -27,6 +40,19 @@
     },
     "day_cloudy": {
       "panoSrc": "assets/pano/day_cloudy.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#8da3b8" },
+            { "pos": 0.5, "color": "#b7c4d2" },
+            { "pos": 0.8, "color": "#d8e0ea" },
+            { "pos": 1, "color": "#f1f4f8" }
+          ],
+          "hazeNoise": { "enabled": false, "opacity": 0.03 }
+        }
+      },
       "layers": [
         {
           "id": "clouds_static",
@@ -49,6 +75,19 @@
     },
     "rain": {
       "panoSrc": "assets/pano/rain.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#4a5868" },
+            { "pos": 0.5, "color": "#667382" },
+            { "pos": 0.8, "color": "#8a96a5" },
+            { "pos": 1, "color": "#b3bcc8" }
+          ],
+          "hazeNoise": { "enabled": false, "opacity": 0.025 }
+        }
+      },
       "layers": [
         {
           "id": "rain_sprite",
@@ -76,6 +115,30 @@
     },
     "night": {
       "panoSrc": "assets/pano/night.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#04070f" },
+            { "pos": 0.35, "color": "#0a1730" },
+            { "pos": 0.7, "color": "#132749" },
+            { "pos": 1, "color": "#1c2f52" }
+          ],
+          "vignette": { "enabled": true, "strength": 0.35, "power": 2.2, "centerX": 0.5, "centerY": 0.45 },
+          "grain": { "enabled": true, "amount": 0.035, "scale": 1.0, "monochrome": true },
+          "hazeNoise": {
+            "enabled": true,
+            "opacity": 0.06,
+            "scale": 2.4,
+            "octaves": 4,
+            "lacunarity": 2.0,
+            "gain": 0.5,
+            "warp": 0.15,
+            "biasY": -0.08
+          }
+        }
+      },
       "layers": [
         {
           "id": "night_mist",
