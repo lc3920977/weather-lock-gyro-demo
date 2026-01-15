@@ -12,14 +12,12 @@ const togglePanoBtn = document.getElementById('togglePano');
 const sceneSelect = document.getElementById('sceneSelect');
 const statusEl = document.getElementById('status');
 const debugStatusEl = document.getElementById('debugStatus');
-const hudEl = document.getElementById('hud');
+const hudEl = document.getElementById('hudPanel');
 const hudToggleBtn = document.getElementById('hudToggle');
 const debugInfoEl = document.getElementById('debugInfo');
-const debugToggleBtn = document.getElementById('toggleDebugPanel');
 const debugHideUiBtn = document.getElementById('toggleLockUi');
 const debugForceVisibleBtn = document.getElementById('toggleForceVisible');
 const debugShowBorderBtn = document.getElementById('toggleLayerBorders');
-const debugPanelEl = document.getElementById('debugPanel');
 const debugBuildEl = document.getElementById('debugBuild');
 const fullscreenBtn = document.getElementById('enterFullscreen');
 const parallaxSelect = document.getElementById('parallaxStrength');
@@ -39,8 +37,7 @@ const state = {
     forceVisible: false,
     showBorders: false
   },
-  debugPanelOpen: false,
-  parallaxStrength: 'med',
+  parallaxStrength: 'low',
   hudVisible: true,
   layers: [],
   frameState: new Map(),
@@ -228,11 +225,11 @@ function getParallaxConfig() {
 function getParallaxStrengthMultiplier() {
   switch (state.parallaxStrength) {
     case 'low':
-      return 0.7;
+      return 0.6;
     case 'high':
-      return 1.35;
-    default:
       return 1.0;
+    default:
+      return 0.6;
   }
 }
 
@@ -727,17 +724,6 @@ function toggleDrag() {
   updateStatus();
 }
 
-function toggleDebugPanel() {
-  state.debugPanelOpen = !state.debugPanelOpen;
-  if (debugPanelEl) {
-    debugPanelEl.hidden = !state.debugPanelOpen;
-  }
-  if (debugToggleBtn) {
-    debugToggleBtn.textContent = state.debugPanelOpen ? '关闭 Debug' : 'Debug';
-  }
-  localStorage.setItem('debugPanelOpen', state.debugPanelOpen ? '1' : '0');
-}
-
 function toggleHudVisibility() {
   applyHudVisibility(!state.hudVisible);
 }
@@ -814,20 +800,13 @@ function handleResize() {
 }
 
 function initDebugPanel() {
-  state.debugPanelOpen = localStorage.getItem('debugPanelOpen') === '1';
-  if (debugPanelEl) {
-    debugPanelEl.hidden = !state.debugPanelOpen;
-  }
-  if (debugToggleBtn) {
-    debugToggleBtn.textContent = state.debugPanelOpen ? '关闭 Debug' : 'Debug';
-  }
   if (debugBuildEl) {
     debugBuildEl.textContent = BUILD_ID;
   }
 }
 
 function initParallaxStrength() {
-  const saved = localStorage.getItem('parallaxStrength');
+  const saved = localStorage.getItem('parallaxPreset');
   if (saved) {
     state.parallaxStrength = saved;
   }
@@ -849,7 +828,7 @@ function initHudVisibility() {
 function handleParallaxChange(event) {
   const value = event.target.value;
   state.parallaxStrength = value;
-  localStorage.setItem('parallaxStrength', value);
+  localStorage.setItem('parallaxPreset', value);
 }
 
 function toggleFullscreen() {
@@ -871,9 +850,6 @@ window.addEventListener('resize', handleResize);
 enableGyroBtn.addEventListener('click', enableGyro);
 calibrateBtn.addEventListener('click', calibrate);
 toggleDragBtn.addEventListener('click', toggleDrag);
-if (debugToggleBtn) {
-  debugToggleBtn.addEventListener('click', toggleDebugPanel);
-}
 if (debugHideUiBtn) {
   debugHideUiBtn.addEventListener('click', toggleLockUi);
 }

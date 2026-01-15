@@ -74,10 +74,10 @@
       max-width: 92%;
       object-fit: contain;
     }
-    #hud {
+    #hudPanel {
       position: absolute;
-      left: calc(16px + env(safe-area-inset-left));
-      bottom: calc(16px + env(safe-area-inset-bottom));
+      right: calc(16px + env(safe-area-inset-right));
+      top: calc(16px + env(safe-area-inset-top));
       background: rgba(0,0,0,0.45);
       padding: 12px 14px;
       border-radius: 12px;
@@ -86,18 +86,14 @@
       width: min(320px, 90vw);
       backdrop-filter: blur(6px);
       z-index: 3;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
     }
     #debugPanel {
-      position: absolute;
-      right: calc(16px + env(safe-area-inset-right));
-      bottom: calc(16px + env(safe-area-inset-bottom));
-      width: min(420px, 92vw);
-      background: rgba(12, 16, 30, 0.92);
-      border-radius: 12px;
-      padding: 12px 14px;
+      background: rgba(12, 16, 30, 0.8);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
       color: #cfe3ff;
-      z-index: 4;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
     }
     #debugPanel h3 {
       margin: 0 0 8px;
@@ -114,7 +110,7 @@
       font-size: 12px;
       white-space: pre-wrap;
     }
-    #hud button, #hud select {
+    #hudPanel button, #hudPanel select {
       width: 100%;
       padding: 8px 10px;
       border-radius: 8px;
@@ -123,7 +119,7 @@
       color: #fff;
       font-size: 14px;
     }
-    #hud .row {
+    #hudPanel .row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
@@ -150,30 +146,7 @@
     #hudToggle:active {
       transform: scale(0.98);
     }
-    #debugHud {
-      background: rgba(12, 16, 30, 0.8);
-      border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 12px;
-      color: #cfe3ff;
-    }
-    #debugHud summary {
-      cursor: pointer;
-      font-size: 13px;
-      color: #ffffff;
-      margin-bottom: 6px;
-    }
-    #debugHud pre {
-      margin: 6px 0 0;
-      white-space: pre-wrap;
-    }
-    #hint {
-      position: absolute;
-      top: calc(16px + env(safe-area-inset-top));
-      right: calc(16px + env(safe-area-inset-right));
-      background: rgba(0,0,0,0.4);
-      padding: 8px 12px;
-      border-radius: 10px;
+    #hintText {
       font-size: 12px;
       color: #d8dcff;
       z-index: 3;
@@ -185,7 +158,7 @@
     <canvas id="threeCanvas"></canvas>
     <div id="overlayStage"></div>
     <div id="lockUi"><img alt="lock ui" src="" /></div>
-    <div id="hud">
+    <div id="hudPanel">
       <button id="enableGyro">启用陀螺仪</button>
       <div class="row">
         <button id="calibrate">校准</button>
@@ -193,32 +166,30 @@
       </div>
       <select id="sceneSelect"></select>
       <select id="parallaxStrength">
-        <option value="low">Parallax: Low</option>
-        <option value="med" selected>Parallax: Med</option>
+        <option value="low" selected>Parallax: Low</option>
         <option value="high">Parallax: High</option>
       </select>
       <div class="row">
         <button id="enterFullscreen">全屏</button>
-        <button id="toggleDebugPanel">Debug</button>
+        <button id="togglePano" hidden>切换为图片</button>
       </div>
-      <button id="togglePano" hidden>切换为图片</button>
       <div id="status"></div>
+      <div id="hintText">拖拽屏幕可模拟陀螺仪</div>
+      <div id="debugPanel">
+        <h3>Debug 面板</h3>
+        <div class="meta">BUILD_ID: <span id="debugBuild"></span></div>
+        <div class="row">
+          <button id="toggleLockUi">隐藏 Lock UI</button>
+          <button id="toggleForceVisible">强制可见模式</button>
+        </div>
+        <div class="row">
+          <button id="toggleLayerBorders">显示边框</button>
+        </div>
+        <pre id="debugStatus"></pre>
+        <pre id="debugInfo"></pre>
+      </div>
     </div>
     <button id="hudToggle" aria-label="Toggle HUD">≡</button>
-    <div id="debugPanel" hidden>
-      <h3>Debug 面板</h3>
-      <div class="meta">BUILD_ID: <span id="debugBuild"></span></div>
-      <div class="row">
-        <button id="toggleLockUi">隐藏 Lock UI</button>
-        <button id="toggleForceVisible">强制可见模式</button>
-      </div>
-      <div class="row">
-        <button id="toggleLayerBorders">显示边框</button>
-      </div>
-      <pre id="debugStatus"></pre>
-      <pre id="debugInfo"></pre>
-    </div>
-    <div id="hint">拖拽屏幕可模拟陀螺仪</div>
   </div>
   <script type="module" src="./app.js"></script>
 </body>
