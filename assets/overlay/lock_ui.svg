@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">
+  <rect width="720" height="1280" fill="none" />
+  <rect x="48" y="80" width="624" height="120" rx="28" fill="rgba(20,20,30,0.8)" />
+  <rect x="210" y="1030" width="300" height="150" rx="36" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.35)" stroke-width="2" />
+  <circle cx="360" cy="1105" r="18" fill="rgba(255,255,255,0.5)" />
+  <text x="80" y="130" fill="#ffffff" font-size="48" font-family="Inter, PingFang SC, sans-serif">12:45</text>
+  <text x="82" y="170" fill="#dfe6ff" font-size="20" font-family="Inter, PingFang SC, sans-serif">Mon 12 Oct</text>
+</svg>
