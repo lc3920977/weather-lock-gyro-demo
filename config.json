@@ -116,28 +116,20 @@
     "night": {
       "panoSrc": "assets/pano/night.svg",
       "pano": {
-        "gradient": {
-          "width": 1024,
-          "height": 512,
-          "stops": [
-            { "pos": 0, "color": "#04070f" },
-            { "pos": 0.35, "color": "#0a1730" },
-            { "pos": 0.7, "color": "#132749" },
-            { "pos": 1, "color": "#1c2f52" }
-          ],
-          "vignette": { "enabled": true, "strength": 0.35, "power": 2.2, "centerX": 0.5, "centerY": 0.45 },
-          "grain": { "enabled": true, "amount": 0.035, "scale": 1.0, "monochrome": true },
-          "hazeNoise": {
-            "enabled": true,
-            "opacity": 0.06,
-            "scale": 2.4,
-            "octaves": 4,
-            "lacunarity": 2.0,
-            "gain": 0.5,
-            "warp": 0.15,
-            "biasY": -0.08
-          }
-        }
+        "type": "gradient",
+        "size": { "w": 2048, "h": 1024 },
+        "direction": 180,
+        "stops": [
+          { "pos": 0.0, "color": "#020C1D" },
+          { "pos": 0.22, "color": "#1F2444" },
+          { "pos": 0.33, "color": "#323A66" },
+          { "pos": 0.53, "color": "#2D3961" },
+          { "pos": 0.76, "color": "#1E2D56" },
+          { "pos": 1.0, "color": "#19264A" }
+        ],
+        "gamma": 1.0,
+        "dither": 0.0,
+        "wrap": "repeat"
       },
       "layers": [
         {

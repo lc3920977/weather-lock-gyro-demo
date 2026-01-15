@@ -6,6 +6,7 @@ const lockUi = document.querySelector('#lockUi img');
 const enableGyroBtn = document.getElementById('enableGyro');
 const calibrateBtn = document.getElementById('calibrate');
 const toggleDragBtn = document.getElementById('toggleDrag');
+const togglePanoBtn = document.getElementById('togglePano');
 const sceneSelect = document.getElementById('sceneSelect');
 const statusEl = document.getElementById('status');
 
@@ -13,6 +14,10 @@ const state = {
   config: null,
   sceneKey: 'day_clear',
   panoTexture: null,
+  panoCache: new Map(),
+  panoImageCache: new Map(),
+  panoOverrides: new Map(),
+  panoInfo: { type: 'color', size: '' },
   layers: [],
   frameState: new Map(),
   spriteState: new Map(),
@@ -84,10 +89,6 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function fade(t) {
-  return t * t * (3 - 2 * t);
-}
-
 function hashStringToSeed(text) {
   let hash = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
@@ -107,179 +108,114 @@ function mulberry32(seed) {
   };
 }
 
-function hash2d(x, y, seed) {
-  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 1442695041);
-  h = (h ^ (h >>> 13)) >>> 0;
-  h = Math.imul(h, 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
-}
-
-function smoothValueNoise(x, y, seed) {
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const xf = x - x0;
-  const yf = y - y0;
-
-  const n00 = hash2d(x0, y0, seed);
-  const n10 = hash2d(x0 + 1, y0, seed);
-  const n01 = hash2d(x0, y0 + 1, seed);
-  const n11 = hash2d(x0 + 1, y0 + 1, seed);
-
-  const u = fade(xf);
-  const v = fade(yf);
-
-  const nx0 = lerp(n00, n10, u);
-  const nx1 = lerp(n01, n11, u);
-  return lerp(nx0, nx1, v);
-}
-
-function fbmNoise(x, y, options, seed) {
-  let amplitude = 1;
-  let frequency = 1;
-  let total = 0;
-  let maxValue = 0;
-  for (let i = 0; i < options.octaves; i += 1) {
-    total += amplitude * smoothValueNoise(x * frequency, y * frequency, seed + i * 1013);
-    maxValue += amplitude;
-    amplitude *= options.gain;
-    frequency *= options.lacunarity;
-  }
-  return maxValue > 0 ? total / maxValue : 0;
-}
-
-function resolveGradientConfig(gradientConfig) {
-  const base = gradientConfig || {};
+function parseHexColor(hex) {
+  const value = hex.replace('#', '');
+  const normalized = value.length === 3
+    ? value.split('').map(ch => ch + ch).join('')
+    : value.padEnd(6, '0');
+  const num = Number.parseInt(normalized, 16);
   return {
-    width: base.width ?? DEFAULT_GRADIENT.width,
-    height: base.height ?? DEFAULT_GRADIENT.height,
-    stops: Array.isArray(base.stops) && base.stops.length > 0 ? base.stops : DEFAULT_GRADIENT.stops,
-    vignette: { ...DEFAULT_GRADIENT.vignette, ...(base.vignette || {}) },
-    grain: { ...DEFAULT_GRADIENT.grain, ...(base.grain || {}) },
-    hazeNoise: { ...DEFAULT_GRADIENT.hazeNoise, ...(base.hazeNoise || {}) }
+    r: (num >> 16) & 255,
+    g: (num >> 8) & 255,
+    b: num & 255
   };
 }
 
-function drawGradientBase(ctx, width, height, stops) {
-  const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  const sortedStops = stops.slice().sort((a, b) => a.pos - b.pos);
-  sortedStops.forEach(stop => {
-    gradient.addColorStop(clamp(stop.pos, 0, 1), stop.color);
-  });
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
-}
-
-function applyVignette(ctx, width, height, vignette) {
-  if (!vignette.enabled || vignette.strength <= 0) return;
-  const cx = width * vignette.centerX;
-  const cy = height * vignette.centerY;
-  const radius = Math.sqrt(width * width + height * height) * 0.5;
-  const innerStop = clamp(Math.pow(0.6, vignette.power), 0.1, 0.95);
-  const gradient = ctx.createRadialGradient(cx, cy, radius * 0.15, cx, cy, radius);
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  gradient.addColorStop(innerStop, `rgba(0, 0, 0, ${vignette.strength * 0.6})`);
-  gradient.addColorStop(1, `rgba(0, 0, 0, ${vignette.strength})`);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'multiply';
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
-  ctx.restore();
-}
-
-function applyGrain(ctx, width, height, grain, rng) {
-  if (!grain.enabled || grain.amount <= 0) return;
-  const scale = grain.scale || 1;
-  const noiseWidth = Math.max(64, Math.round(width / (6 / scale)));
-  const noiseHeight = Math.max(32, Math.round(height / (6 / scale)));
-  const noiseCanvas = document.createElement('canvas');
-  noiseCanvas.width = noiseWidth;
-  noiseCanvas.height = noiseHeight;
-  const noiseCtx = noiseCanvas.getContext('2d');
-  const imageData = noiseCtx.createImageData(noiseWidth, noiseHeight);
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    const value = Math.floor(rng() * 255);
-    if (grain.monochrome) {
-      imageData.data[i] = value;
-      imageData.data[i + 1] = value;
-      imageData.data[i + 2] = value;
-    } else {
-      imageData.data[i] = Math.floor(rng() * 255);
-      imageData.data[i + 1] = Math.floor(rng() * 255);
-      imageData.data[i + 2] = Math.floor(rng() * 255);
+function buildGradientLut(stops, size, gamma) {
+  const sorted = stops.slice().sort((a, b) => a.pos - b.pos);
+  const lut = new Array(size).fill(null);
+  let stopIndex = 0;
+  for (let i = 0; i < size; i += 1) {
+    const t = i / (size - 1);
+    while (stopIndex < sorted.length - 2 && t > sorted[stopIndex + 1].pos) {
+      stopIndex += 1;
     }
-    imageData.data[i + 3] = 255;
+    const left = sorted[stopIndex];
+    const right = sorted[Math.min(stopIndex + 1, sorted.length - 1)];
+    const span = right.pos - left.pos || 1;
+    const localT = clamp((t - left.pos) / span, 0, 1);
+    const adjustedT = gamma !== 1 ? Math.pow(localT, gamma) : localT;
+    const leftColor = parseHexColor(left.color);
+    const rightColor = parseHexColor(right.color);
+    lut[i] = {
+      r: Math.round(lerp(leftColor.r, rightColor.r, adjustedT)),
+      g: Math.round(lerp(leftColor.g, rightColor.g, adjustedT)),
+      b: Math.round(lerp(leftColor.b, rightColor.b, adjustedT))
+    };
   }
-  noiseCtx.putImageData(imageData, 0, 0);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'soft-light';
-  ctx.globalAlpha = grain.amount;
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(noiseCanvas, 0, 0, width, height);
-  ctx.restore();
+  return lut;
 }
 
-function applyHazeNoise(ctx, width, height, hazeNoise, seed) {
-  if (!hazeNoise.enabled || hazeNoise.opacity <= 0) return;
-  const scale = hazeNoise.scale || 1;
-  const noiseWidth = Math.max(64, Math.round(width / (8 / scale)));
-  const noiseHeight = Math.max(32, Math.round(height / (8 / scale)));
-  const noiseCanvas = document.createElement('canvas');
-  noiseCanvas.width = noiseWidth;
-  noiseCanvas.height = noiseHeight;
-  const noiseCtx = noiseCanvas.getContext('2d');
-  const imageData = noiseCtx.createImageData(noiseWidth, noiseHeight);
-  const biasY = hazeNoise.biasY || 0;
+function createGradientEquirectTexture(panoConfig, renderer, seed) {
+  const width = Math.max(2, panoConfig.size?.w ?? 2048);
+  const height = Math.max(2, panoConfig.size?.h ?? 1024);
+  const direction = panoConfig.direction ?? 180;
+  const stops = Array.isArray(panoConfig.stops) && panoConfig.stops.length > 0
+    ? panoConfig.stops
+    : [{ pos: 0, color: '#000000' }, { pos: 1, color: '#222233' }];
+  const gamma = panoConfig.gamma ?? 1;
+  const dither = panoConfig.dither ?? 0;
 
-  for (let y = 0; y < noiseHeight; y += 1) {
-    for (let x = 0; x < noiseWidth; x += 1) {
-      const nx = (x / noiseWidth) * scale;
-      const ny = (y / noiseHeight) * scale + biasY;
-      const warpAmount = hazeNoise.warp || 0;
-      const warpX = warpAmount
-        ? (smoothValueNoise(nx * 0.7, ny * 0.7, seed + 911) - 0.5) * warpAmount
-        : 0;
-      const warpY = warpAmount
-        ? (smoothValueNoise(nx * 0.7 + 3.2, ny * 0.7 + 1.1, seed + 1777) - 0.5) * warpAmount
-        : 0;
-      const value = fbmNoise(nx + warpX, ny + warpY, hazeNoise, seed);
-      const luminance = clamp(Math.round(128 + (value - 0.5) * 80), 90, 190);
-      const index = (y * noiseWidth + x) * 4;
-      imageData.data[index] = luminance;
-      imageData.data[index + 1] = luminance;
-      imageData.data[index + 2] = luminance;
-      imageData.data[index + 3] = 255;
-    }
-  }
-  noiseCtx.putImageData(imageData, 0, 0);
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'soft-light';
-  ctx.globalAlpha = hazeNoise.opacity;
-  ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(noiseCanvas, 0, 0, width, height);
-  ctx.restore();
-}
-
-function createGradientTexture(sceneKey, gradientConfig) {
-  const config = resolveGradientConfig(gradientConfig);
   const canvasEl = document.createElement('canvas');
-  canvasEl.width = config.width;
-  canvasEl.height = config.height;
+  canvasEl.width = width;
+  canvasEl.height = height;
   const ctx = canvasEl.getContext('2d');
   if (!ctx) return null;
 
-  drawGradientBase(ctx, config.width, config.height, config.stops);
-  applyVignette(ctx, config.width, config.height, config.vignette);
+  const imageData = ctx.createImageData(width, height);
+  const data = imageData.data;
+  const rad = (direction * Math.PI) / 180;
+  const vx = Math.sin(rad);
+  const vy = -Math.cos(rad);
+  const halfDiag = Math.sqrt(width * width + height * height) / 2;
+  const cx = width / 2;
+  const cy = height / 2;
+  const startX = cx - vx * halfDiag;
+  const startY = cy - vy * halfDiag;
+  const endX = cx + vx * halfDiag;
+  const endY = cy + vy * halfDiag;
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const denom = dx * dx + dy * dy || 1;
+  const lutSize = Math.max(512, Math.round(width * 0.75));
+  const lut = buildGradientLut(stops, lutSize, gamma);
+  const rng = dither > 0 ? mulberry32(seed) : null;
+  const ditherAmount = dither > 0 ? dither * 255 : 0;
 
-  const seed = hashStringToSeed(sceneKey);
-  applyGrain(ctx, config.width, config.height, config.grain, mulberry32(seed));
-  applyHazeNoise(ctx, config.width, config.height, config.hazeNoise, seed + 199);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const t = clamp(((x - startX) * dx + (y - startY) * dy) / denom, 0, 1);
+      const lutIndex = Math.round(t * (lutSize - 1));
+      const color = lut[lutIndex];
+      let r = color.r;
+      let g = color.g;
+      let b = color.b;
+      if (rng) {
+        const noise = (rng() * 2 - 1) * ditherAmount;
+        r = clamp(Math.round(r + noise), 0, 255);
+        g = clamp(Math.round(g + noise), 0, 255);
+        b = clamp(Math.round(b + noise), 0, 255);
+      }
+      const index = (y * width + x) * 4;
+      data[index] = r;
+      data[index + 1] = g;
+      data[index + 2] = b;
+      data[index + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
 
   const texture = new THREE.CanvasTexture(canvasEl);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.mapping = THREE.EquirectangularReflectionMapping;
+  texture.wrapS = panoConfig.wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+  texture.wrapT = panoConfig.wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  const maxAniso = renderer.capabilities.getMaxAnisotropy?.() ?? 1;
+  texture.anisotropy = Math.min(4, Math.max(1, maxAniso));
+  texture.needsUpdate = true;
   return texture;
 }
 
@@ -316,29 +252,109 @@ function createLayerElement(layer) {
   return wrapper;
 }
 
+function getScenePanoOptions(sceneKey, sceneConfig) {
+  const panoConfig = sceneConfig.pano || null;
+  const hasGradient = panoConfig?.type === 'gradient';
+  const imageSrc = panoConfig?.type === 'image' ? panoConfig.src : sceneConfig.panoSrc;
+  const hasImage = Boolean(imageSrc);
+  const override = state.panoOverrides.get(sceneKey);
+  const desiredType = override && ((override === 'gradient' && hasGradient) || (override === 'image' && hasImage))
+    ? override
+    : (hasGradient ? 'gradient' : (hasImage ? 'image' : 'color'));
+  return {
+    panoConfig,
+    hasGradient,
+    hasImage,
+    imageSrc,
+    desiredType
+  };
+}
+
+function applyPanoTexture(texture, info) {
+  sphereMat.map = texture;
+  sphereMat.needsUpdate = true;
+  state.panoTexture = texture;
+  state.panoInfo = info;
+}
+
+function applyPanoFallback() {
+  sphereMat.map = null;
+  sphereMat.color.setHex(0x111111);
+  sphereMat.needsUpdate = true;
+  state.panoTexture = null;
+  state.panoInfo = { type: 'color', size: '' };
+}
+
+function loadImageTexture(src, sceneKey) {
+  if (state.panoImageCache.has(src)) {
+    return Promise.resolve(state.panoImageCache.get(src));
+  }
+  return new Promise(resolve => {
+    const loader = new THREE.TextureLoader();
+    loader.load(src, texture => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      const maxAniso = renderer.capabilities.getMaxAnisotropy?.() ?? 1;
+      texture.anisotropy = Math.min(4, Math.max(1, maxAniso));
+      state.panoImageCache.set(src, texture);
+      resolve(texture);
+    }, undefined, () => resolve(null));
+  });
+}
+
+function updatePanoToggle(hasGradient, hasImage, desiredType) {
+  if (!togglePanoBtn) return;
+  if (hasGradient && hasImage) {
+    togglePanoBtn.hidden = false;
+    const nextLabel = desiredType === 'gradient' ? '切换为图片' : '切换为渐变';
+    togglePanoBtn.textContent = nextLabel;
+  } else {
+    togglePanoBtn.hidden = true;
+  }
+}
+
 function setupScene(sceneKey) {
   const sceneConfig = state.config.scenes[sceneKey];
   if (!sceneConfig) return;
   state.sceneKey = sceneKey;
 
-  if (sceneConfig.pano?.gradient) {
-    const texture = createGradientTexture(sceneKey, sceneConfig.pano.gradient);
-    if (texture) {
-      if (state.panoTexture) state.panoTexture.dispose();
-      sphereMat.map = texture;
-      sphereMat.needsUpdate = true;
-      state.panoTexture = texture;
+  const panoOptions = getScenePanoOptions(sceneKey, sceneConfig);
+  updatePanoToggle(panoOptions.hasGradient, panoOptions.hasImage, panoOptions.desiredType);
+
+  if (panoOptions.desiredType === 'gradient' && panoOptions.panoConfig?.type === 'gradient') {
+    if (state.panoCache.has(sceneKey)) {
+      const cached = state.panoCache.get(sceneKey);
+      applyPanoTexture(cached.texture, cached.info);
+    } else {
+      const seed = hashStringToSeed(sceneKey);
+      const texture = createGradientEquirectTexture(panoOptions.panoConfig, renderer, seed);
+      if (texture) {
+        const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+        const info = { type: 'gradient', size: sizeLabel };
+        state.panoCache.set(sceneKey, { texture, info });
+        applyPanoTexture(texture, info);
+      } else if (panoOptions.hasImage && panoOptions.imageSrc) {
+        loadImageTexture(panoOptions.imageSrc, sceneKey).then(texture => {
+          if (!texture) return applyPanoFallback();
+          const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+          applyPanoTexture(texture, { type: 'image', size: sizeLabel });
+        });
+      } else {
+        applyPanoFallback();
+      }
     }
-  } else if (sceneConfig.panoSrc) {
-    const loader = new THREE.TextureLoader();
-    loader.load(sceneConfig.panoSrc, texture => {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      if (state.panoTexture) state.panoTexture.dispose();
-      sphereMat.map = texture;
-      sphereMat.needsUpdate = true;
-      state.panoTexture = texture;
+  } else if (panoOptions.desiredType === 'image' && panoOptions.imageSrc) {
+    loadImageTexture(panoOptions.imageSrc, sceneKey).then(texture => {
+      if (!texture) return applyPanoFallback();
+      const sizeLabel = `${texture.image.width}x${texture.image.height}`;
+      applyPanoTexture(texture, { type: 'image', size: sizeLabel });
     });
+  } else {
+    applyPanoFallback();
   }
 
   overlayStage.innerHTML = '';
@@ -483,7 +499,8 @@ function updateStatus() {
   statusEl.textContent = `yaw: ${state.smoothYaw3D.toFixed(3)} rad\n` +
     `pitch: ${state.smoothPitch3D.toFixed(3)} rad\n` +
     `传感器: ${state.sensorAvailable ? (state.sensorActive ? '已启用' : '未启用') : '不可用'}\n` +
-    `兜底拖拽: ${state.useDrag ? '开' : '关'}`;
+    `兜底拖拽: ${state.useDrag ? '开' : '关'}\n` +
+    `pano: ${state.panoInfo.type}${state.panoInfo.size ? ` (${state.panoInfo.size})` : ''}`;
 }
 
 function onDeviceOrientation(event) {
@@ -574,6 +591,15 @@ function toggleDrag() {
   updateStatus();
 }
 
+function togglePanoMode() {
+  const sceneConfig = state.config.scenes[state.sceneKey];
+  const options = getScenePanoOptions(state.sceneKey, sceneConfig);
+  if (!options.hasGradient || !options.hasImage) return;
+  const nextType = options.desiredType === 'gradient' ? 'image' : 'gradient';
+  state.panoOverrides.set(state.sceneKey, nextType);
+  setupScene(state.sceneKey);
+}
+
 function calibrate() {
   state.zeroYaw = state.smoothYaw3D;
   state.zeroPitch = state.smoothPitch3D;
@@ -619,6 +645,9 @@ window.addEventListener('resize', handleResize);
 enableGyroBtn.addEventListener('click', enableGyro);
 calibrateBtn.addEventListener('click', calibrate);
 toggleDragBtn.addEventListener('click', toggleDrag);
+if (togglePanoBtn) {
+  togglePanoBtn.addEventListener('click', togglePanoMode);
+}
 sceneSelect.addEventListener('change', event => {
   setupScene(event.target.value);
 });
