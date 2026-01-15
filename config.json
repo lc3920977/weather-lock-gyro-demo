@@ -2,6 +2,19 @@
   "scenes": {
     "day_clear": {
       "panoSrc": "assets/pano/day_clear.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#8ac8ff" },
+            { "pos": 0.45, "color": "#b9e1ff" },
+            { "pos": 0.75, "color": "#dff2ff" },
+            { "pos": 1, "color": "#f7fbff" }
+          ],
+          "hazeNoise": { "enabled": false, "opacity": 0.03 }
+        }
+      },
       "layers": [
         {
           "id": "clouds_frames",
@@ -27,6 +40,19 @@
     },
     "day_cloudy": {
       "panoSrc": "assets/pano/day_cloudy.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#8da3b8" },
+            { "pos": 0.5, "color": "#b7c4d2" },
+            { "pos": 0.8, "color": "#d8e0ea" },
+            { "pos": 1, "color": "#f1f4f8" }
+          ],
+          "hazeNoise": { "enabled": false, "opacity": 0.03 }
+        }
+      },
       "layers": [
         {
           "id": "clouds_static",
@@ -49,6 +75,19 @@
     },
     "rain": {
       "panoSrc": "assets/pano/rain.svg",
+      "pano": {
+        "gradient": {
+          "width": 1024,
+          "height": 512,
+          "stops": [
+            { "pos": 0, "color": "#4a5868" },
+            { "pos": 0.5, "color": "#667382" },
+            { "pos": 0.8, "color": "#8a96a5" },
+            { "pos": 1, "color": "#b3bcc8" }
+          ],
+          "hazeNoise": { "enabled": false, "opacity": 0.025 }
+        }
+      },
       "layers": [
         {
           "id": "rain_sprite",
