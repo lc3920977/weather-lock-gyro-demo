@@ -18,9 +18,13 @@ const debugInfoEl = document.getElementById('debugInfo');
 const debugHideUiBtn = document.getElementById('toggleLockUi');
 const debugForceVisibleBtn = document.getElementById('toggleForceVisible');
 const debugShowBorderBtn = document.getElementById('toggleLayerBorders');
+const debugShowVectorsBtn = document.getElementById('toggleLayerVectors');
 const debugBuildEl = document.getElementById('debugBuild');
 const fullscreenBtn = document.getElementById('enterFullscreen');
 const parallaxSelect = document.getElementById('parallaxStrength');
+
+const OVERLAY_GLOBAL_ATTENUATION = 0.5;
+const MOON_MAX_DY_RATIO = 0.16;
 
 const state = {
   config: null,
@@ -35,7 +39,8 @@ const state = {
   debugFlags: {
     hideLockUi: false,
     forceVisible: false,
-    showBorders: false
+    showBorders: false,
+    showVectors: false
   },
   parallaxStrength: 'low',
   hudVisible: true,
@@ -233,9 +238,6 @@ function getParallaxStrengthMultiplier() {
   }
 }
 
-function getOverlayGlobalAttenuation() {
-  return 0.5;
-}
 
 function applyHudVisibility(visible) {
   if (!hudEl) return;
@@ -579,22 +581,53 @@ function updateTransforms() {
     const pitchResponse = response.yFromPitch ?? 1;
     const rotXResponse = response.rotX ?? 1;
     const rotYResponse = response.rotY ?? 1;
-    const globalAttenuation = getOverlayGlobalAttenuation();
-    let tx = yawNorm * translateBase * translate.x * translateMult * globalAttenuation * yawResponse + layerOffsetX;
-    let ty = pitchNorm * translateBase * translate.y * translateMult * globalAttenuation * pitchResponse + layerOffsetY;
-    const ry = yawNorm * rotateBase * rotate.y * rotateMult * globalAttenuation * rotYResponse * degToRad;
-    const rx = -pitchNorm * rotateBase * rotate.x * rotateMult * globalAttenuation * rotXResponse * degToRad;
+    let tx = yawNorm * translateBase * translate.x * translateMult * yawResponse + layerOffsetX;
+    let ty = pitchNorm * translateBase * translate.y * translateMult * pitchResponse + layerOffsetY;
+    let ry = yawNorm * rotateBase * rotate.y * rotateMult * rotYResponse * degToRad;
+    let rx = -pitchNorm * rotateBase * rotate.x * rotateMult * rotXResponse * degToRad;
 
-    if (typeof config.parallax?.maxDyRatio === 'number') {
-      const maxDy = window.innerHeight * config.parallax.maxDyRatio;
-      ty = clamp(ty, -maxDy, maxDy);
+    if (state.sceneKey === 'night') {
+      if (config.id === 'water_reflect') {
+        ty = 0;
+        rx = 0;
+        ry = 0;
+      }
+      if (config.id === 'moon') {
+        const maxDy = window.innerHeight * MOON_MAX_DY_RATIO;
+        ty = clamp(ty, -maxDy, maxDy);
+      }
+      if (config.id === 'stars' || config.id === 'meteor') {
+        const maxDx = window.innerWidth * 0.08;
+        const maxDy = window.innerHeight * 0.06;
+        tx = clamp(tx, -maxDx, maxDx);
+        ty = clamp(ty, -maxDy, maxDy);
+        element.style.width = '100vw';
+        element.style.height = '100vh';
+        element.style.transformOrigin = 'center';
+      }
     }
+
+    tx *= OVERLAY_GLOBAL_ATTENUATION;
+    ty *= OVERLAY_GLOBAL_ATTENUATION;
+    rx *= OVERLAY_GLOBAL_ATTENUATION;
+    ry *= OVERLAY_GLOBAL_ATTENUATION;
 
     element.style.transform = `translate3d(${tx}px, ${ty}px, 0px) rotateY(${ry}rad) rotateX(${rx}rad) scale(${scale})`;
     element.style.opacity = opacity;
     element.style.mixBlendMode = blendMode;
     element.style.filter = blur ? `blur(${blur}px)` : 'none';
-    element.style.outline = state.debugFlags.showBorders ? '1px solid rgba(0, 200, 255, 0.8)' : 'none';
+    element.style.outline = (state.debugFlags.showBorders || state.debugFlags.showVectors)
+      ? '1px solid rgba(0, 200, 255, 0.8)'
+      : 'none';
+    if (state.debugFlags.showVectors && state.sceneKey === 'night') {
+      state.layerDebug.set(`${config.id}-vectors`, {
+        tx: tx.toFixed(1),
+        ty: ty.toFixed(1),
+        rx: (rx / degToRad).toFixed(2),
+        ry: (ry / degToRad).toFixed(2),
+        scale: scale.toFixed(3)
+      });
+    }
   });
 
   const uiConfig = state.config.scenes[state.sceneKey].ui;
@@ -632,6 +665,9 @@ function updateStatus() {
     const sceneConfig = state.config.scenes[sceneKey];
     const layerCount = overlayStage.children.length;
     const lines = [];
+    if (state.debugFlags.showVectors && sceneKey === 'night') {
+      lines.push('vectors (night layers):');
+    }
     lines.push(`scene: ${sceneKey}`);
     lines.push(`overlay DOM count: ${layerCount}`);
     lines.push('layers:');
@@ -642,6 +678,12 @@ function updateStatus() {
       const src = debug.src || buildUrl(layer.src || '');
       lines.push(`- ${layer.id} | ${layer.type} | ${src} | opacity:${layer.opacity ?? 1} | blend:${layer.blendMode ?? 'normal'} | depth:${layer.depth ?? 0}`);
       lines.push(`  ${status} (${size})`);
+      if (state.debugFlags.showVectors && sceneKey === 'night') {
+        const vectors = state.layerDebug.get(`${layer.id}-vectors`);
+        if (vectors) {
+          lines.push(`  dx:${vectors.tx}px dy:${vectors.ty}px rotX:${vectors.rx}° rotY:${vectors.ry}° scale:${vectors.scale}`);
+        }
+      }
     });
     debugInfoEl.textContent = lines.join('\n');
   }
@@ -765,6 +807,15 @@ function toggleLayerBorders() {
   }
 }
 
+function toggleLayerVectors() {
+  state.debugFlags.showVectors = !state.debugFlags.showVectors;
+  if (debugShowVectorsBtn) {
+    debugShowVectorsBtn.textContent = state.debugFlags.showVectors
+      ? '隐藏 Layer Vectors'
+      : 'Debug: show layer vectors';
+  }
+}
+
 function togglePanoMode() {
   const sceneConfig = state.config.scenes[state.sceneKey];
   const options = getScenePanoOptions(state.sceneKey, sceneConfig);
@@ -873,6 +924,9 @@ if (debugForceVisibleBtn) {
 }
 if (debugShowBorderBtn) {
   debugShowBorderBtn.addEventListener('click', toggleLayerBorders);
+}
+if (debugShowVectorsBtn) {
+  debugShowVectorsBtn.addEventListener('click', toggleLayerVectors);
 }
 if (togglePanoBtn) {
   togglePanoBtn.addEventListener('click', togglePanoMode);

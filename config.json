@@ -121,7 +121,7 @@
       },
       "layers": [
         {
-          "id": "night_stars",
+          "id": "stars",
           "type": "image",
           "src": "assets/overlay/layers/stars.png",
           "depth": 0.1,
@@ -134,7 +134,7 @@
           "scale": 1.04
         },
         {
-          "id": "night_meteor",
+          "id": "meteor",
           "type": "image",
           "src": "assets/overlay/layers/meteor.png",
           "depth": 0.35,
@@ -147,7 +147,7 @@
           "scale": 1.06
         },
         {
-          "id": "night_water_reflect",
+          "id": "water_reflect",
           "type": "image",
           "src": "assets/overlay/layers/water_reflect.png",
           "depth": 0.7,
@@ -165,7 +165,7 @@
           "scale": 1.14
         },
         {
-          "id": "night_moon",
+          "id": "moon",
           "type": "image",
           "src": "assets/overlay/layers/moon.png",
           "depth": 0.95,
