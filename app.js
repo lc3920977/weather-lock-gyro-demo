@@ -272,6 +272,7 @@ function getScenePanoOptions(sceneKey, sceneConfig) {
 
 function applyPanoTexture(texture, info) {
   sphereMat.map = texture;
+  sphereMat.color.setHex(0xffffff);
   sphereMat.needsUpdate = true;
   state.panoTexture = texture;
   state.panoInfo = info;
@@ -294,7 +295,11 @@ function loadImageTexture(src, sceneKey) {
     loader.load(src, texture => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.mapping = THREE.EquirectangularReflectionMapping;
-      texture.wrapS = THREE.RepeatWrapping;
+      const width = texture.image?.width || 0;
+      const height = texture.image?.height || 0;
+      const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
+      const pot = isPowerOfTwo(width) && isPowerOfTwo(height);
+      texture.wrapS = pot ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
       texture.wrapT = THREE.ClampToEdgeWrapping;
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
